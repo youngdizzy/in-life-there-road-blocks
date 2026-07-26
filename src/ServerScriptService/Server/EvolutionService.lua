@@ -54,6 +54,25 @@ function EvolutionService.CheckAndEvolve(player, profile, record)
 	local definition = CritterDefinitions.Get(outcomeId)
 	assert(definition, "EvolutionService: unknown outcome " .. tostring(outcomeId))
 
+	-- Snapshot what's about to be overwritten. Nothing consumes this yet --
+	-- it's the foundation an evolution reroll/"second chance" system would
+	-- need (see the monetization spec Phase 5), captured now so that data
+	-- isn't lost by the time such a system exists. Building the actual
+	-- reroll flow (an item, a remote, a UI) with no reroll mechanic to
+	-- attach it to would just be unfinished surface area.
+	table.insert(record.EvolutionHistory, {
+		Timestamp = os.time(),
+		FromDefinitionId = record.DefinitionId,
+		ToDefinitionId = outcomeId,
+		GrowthPoints = record.GrowthPoints,
+		Influences = {
+			Fire = record.Influences.Fire,
+			Water = record.Influences.Water,
+			Nature = record.Influences.Nature,
+			Shadow = record.Influences.Shadow,
+		},
+	})
+
 	record.DefinitionId = outcomeId
 	record.EvolvedInto = outcomeId
 	record.Stage = "Evolved"

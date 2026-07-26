@@ -141,10 +141,12 @@ unrelated scripts. `CritterDefinitions.lua`, `FoodConfig.lua`, and
 The client is never trusted with currency, inventory, Critter ownership,
 evolution outcomes, or progression values. Concretely:
 
-- `FeedCritter` and `PlayAtZone` remotes carry only *which food/zone* the
-  player chose — the server looks up the effect from config, checks
-  cooldowns and inventory server-side, and mutates the profile itself.
-  The client cannot say "give me +50 Fire."
+- The `FeedCritter` remote carries only *which food* the player chose;
+  Play-at-a-Zone isn't a remote at all — it's a habitat ProximityPrompt the
+  server triggers directly, so the engine itself guarantees the triggering
+  player was physically there. Either way the server looks up the effect
+  from config, checks cooldowns server-side, and mutates the profile
+  itself. The client cannot say "give me +50 Fire."
 - Evolution is decided and executed entirely in `EvolutionService` on the
   server. The client only receives the *result* (`EvolutionReveal`) to
   animate.
@@ -158,23 +160,35 @@ Per-player profile (see `DataManager.DefaultProfile`):
 
 ```lua
 {
+    SchemaVersion,
     Critters = { [uid] = {
         DefinitionId, Name, GrowthPoints, Stage,
         Influences = { Fire, Water, Nature, Shadow },
         Hunger, Happiness,
         EvolvedInto, -- nil until evolution happens
+        EquippedCosmetic, -- cosmeticId or nil; per-Critter, not account-wide
+        EvolutionHistory, -- snapshots captured right before each evolution
     } },
     ActiveCritterUid, -- the one Critter the player is raising in v1
     Inventory = { [foodId] = count },
     HabitatIndex,
     NextCritterUid,
+
+    Gems,
+    Discoveries, -- count of Rare Discoveries found (see DiscoveryService)
+    OwnedGamepasses = { [gamepassKey] = true },
+    UnlockedCosmetics = { [cosmeticId] = true }, -- account-wide unlocks
+    ActiveBoosts = { [boostType] = { ExpiresAt } }, -- see BoostService
+    ProcessedReceipts, -- idempotency ring buffer, see MonetizationService
 }
 ```
 
 Designed to expand: multiple simultaneous Critters later just means
 iterating `Critters` instead of assuming one; `Inventory` already supports
 arbitrary future item types; nothing here assumes a single evolution or a
-single habitat forever.
+single habitat forever. `SchemaVersion` exists so a future field that needs
+a real migration (not just an additive default) has something to branch on
+— every change so far has been additive.
 
 **Reliability requirements:** loads retry on transient DataStore failure
 and fall back to defaults rather than blocking join; saves happen on
@@ -210,6 +224,63 @@ change.
 - All of the above persists through DataStore save/load, including quick
   leave/rejoin.
 
+## Monetization Philosophy
+
+> Players should spend because something is cool, convenient, collectible,
+> exclusive, or status-enhancing — not because the free game is
+> intentionally miserable.
+
+Concretely, that means:
+
+- **Every Gamepass/Developer Product Id lives in one file**
+  (`MonetizationConfig.lua`), as a placeholder until real ones are created
+  in the Creator Dashboard. Nothing else in the codebase hardcodes an Id.
+- **Luck and Growth Speed bonuses stack additively over a base of 1.0**
+  (see `LuckService`/`GrowthService`), never multiplicatively — a
+  permanent gamepass plus a temporary potion is a strong 3x, never a
+  runaway number. See `MonetizationConfig.Luck`/`.Growth`.
+- **Luck never guarantees a rare outcome.** It's applied to a capped
+  chance (`LuckService.ApplyToChance`, capped by
+  `MonetizationConfig.Discovery.MaxChance`), never to "skip the roll."
+- **Auto-Care and Growth Boost never remove the player's decisions.**
+  Auto-Care tops up Hunger/Happiness only — it never grants Growth Points,
+  so evolution always requires the player to actually choose foods/zones.
+  Growth Boost multiplies the Growth Points those *real* actions are
+  worth; it doesn't grant points on its own.
+- **The Mutation Lab gives more information, never the answer.** It shows
+  qualitative Influence strength ("strong", "faint", ...), never raw
+  numbers, and never names the eventual evolution outcome.
+- **Every purchase is server-validated.** Gamepass ownership is checked
+  with `MarketplaceService:UserOwnsGamePassAsync` and cached in
+  `profile.OwnedGamepasses`, never trusted from the client. Developer
+  product grants go through `ProcessReceipt` with an idempotency ring
+  buffer (`DataManager.ProcessedReceipts`) so a Roblox retry can never
+  grant something twice.
+- **A free player can still discover, raise, evolve, and progress.** See
+  "MVP Scope" — none of it requires spending.
+
+## Monetization Phase Status
+
+Built in the order the monetization spec asked for, so each phase lands on
+a working foundation rather than everything half-built at once:
+
+| Phase | Contents | Status |
+|---|---|---|
+| 1 | `MonetizationConfig`, gamepass ownership checking, 2x Luck, Growth Boost, `DiscoveryService` (first real luck-gated hook) | ✅ Implemented |
+| 2 | Extra Critter Slots (`CritterSlotService`), VIP Habitat visual (`HabitatManager.ApplyVIPVisual`), Cosmetic effect system (`CosmeticService`, 2 real effects + 4 stubs) | ✅ Implemented |
+| 3 | Auto-Care (`InfluenceService.StartAutoCareLoop`), Mutation Lab (`MutationLabService`) | ✅ Implemented |
+| 4 | `ProcessReceipt`, gem packs, temporary Growth/Luck boosts (`BoostService`) | ✅ Implemented |
+| 5 | Mystery Mutation Items, evolution reroll/second-chance | 🚧 Data-only stub (`MutationItemConfig`) + a snapshot hook (`EvolutionService.EvolutionHistory`) captured for later — no inventory system exists yet for items to plug into, so the grant/consume/effect flow isn't built |
+| 6 | Limited-time event framework | 🚧 Schema-only stub (`EventConfig`, four example events, all `Active = false`) — no `EventService` runs any of it yet |
+| 7 | Habitat monetization (premium themes) | 🚧 Schema-only stub (`HabitatThemeConfig`) — VIP Habitat's corner-post/badge visual is the only real habitat monetization shipped so far |
+
+Practical limitation worth knowing: **Extra Critter Slots has no visible
+effect yet.** The gate (`CritterSlotService`) is real and enforced, but v1
+has no way to *acquire* a second Critter at all (no gacha, no event
+drops) — so raising the cap currently can't be exercised. It becomes real
+the moment any future system grants a Critter through
+`CritterSlotService.AddCritter`.
+
 ## Explicitly Not Built Yet
 
 Per Development Principle #12 and the phased build plan, the following are
@@ -217,16 +288,16 @@ real future pillars but are **out of scope until the above loop is proven
 fun**:
 
 - Trading between players
-- Large multiplayer live events
+- Large multiplayer live events (framework schema exists, see Phase 6 above; not running)
 - Multiple currencies
 - A large open world
 - Combat
 - A large Critter catalog (beyond the 5 fully-implemented + 4 stubs above)
-- Monetization of any kind (gamepasses, dev products, cosmetics-for-cash)
 - Battle passes
 - A large quest system
 - Complex crafting
-- A large inventory/item system beyond the small starter food menu
+- A large inventory/item system beyond the small starter food menu (this
+  is also why Mystery Mutation Items aren't built yet — see Phase 5 above)
 
 ## Development Principles
 

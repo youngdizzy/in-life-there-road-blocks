@@ -12,7 +12,11 @@
         "FeedCritter": { "$className": "RemoteEvent" },
         "StateUpdate": { "$className": "RemoteEvent" },
         "EvolutionReveal": { "$className": "RemoteEvent" },
-        "Notify": { "$className": "RemoteEvent" }
+        "Notify": { "$className": "RemoteEvent" },
+        "PromptGamepass": { "$className": "RemoteEvent" },
+        "PromptDevProduct": { "$className": "RemoteEvent" },
+        "EquipCosmetic": { "$className": "RemoteEvent" },
+        "GetMutationAnalysis": { "$className": "RemoteFunction" }
       }
     },
 

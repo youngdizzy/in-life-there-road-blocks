@@ -18,22 +18,35 @@ Studio-authored assets to keep in sync.
 src/
   ReplicatedStorage/
     Config/        -- pure data: CritterDefinitions, FoodConfig,
-                       EnvironmentConfig, GrowthConfig, HabitatConfig
-    Modules/        -- Remotes.lua (RemoteEvent accessor)
+                       EnvironmentConfig, GrowthConfig, HabitatConfig,
+                       MonetizationConfig, CosmeticConfig,
+                       MutationItemConfig / EventConfig / HabitatThemeConfig
+                       (the last three are Phase 5-7 schema stubs, unused)
+    Modules/        -- Remotes.lua (RemoteEvent/RemoteFunction accessor)
   ServerScriptService/
     Server/
-      DataManager.lua        -- DataStore persistence
-      HabitatBuilder.lua     -- procedurally builds the world
-      HabitatManager.lua     -- assigns/releases habitats to players
-      CritterService.lua     -- starter Pip grant + procedural model
-      InfluenceService.lua   -- Feed / Play-at-Zone (server-validated)
-      GrowthService.lua      -- growth meter, stage, discovery hint
-      EvolutionService.lua   -- evolution outcome + transformation
-      StateService.lua       -- builds the client's read-only state view
-      Init.server.lua        -- bootstraps everything, player lifecycle
+      DataManager.lua          -- DataStore persistence
+      HabitatBuilder.lua       -- procedurally builds the world
+      HabitatManager.lua       -- assigns/releases habitats; VIP visual
+      CritterService.lua       -- starter Pip grant + procedural model
+      CritterSlotService.lua   -- validated Critter-slot gate
+      CosmeticService.lua      -- attaches cosmetic effects to a model
+      InfluenceService.lua     -- Feed / Play-at-Zone / Auto-Care
+      GrowthService.lua        -- growth meter, stage, discovery hint,
+                                   growth multiplier
+      EvolutionService.lua     -- evolution outcome + transformation
+      LuckService.lua          -- centralized luck multiplier
+      BoostService.lua         -- timed Growth/Luck boost tracking
+      DiscoveryService.lua     -- luck-gated Rare Discovery roll
+      MonetizationService.lua  -- gamepass ownership + dev product receipts
+      MutationLabService.lua   -- gated qualitative Influence analysis
+      StateService.lua         -- builds the client's read-only state view
+      Init.server.lua          -- bootstraps everything, player lifecycle
   StarterPlayer/StarterPlayerScripts/Client/
-    PipStatusUI.lua     -- name/stage/hunger/happiness/hint panel
+    PipStatusUI.lua     -- name/stage/hunger/happiness/hint/gems/boosts panel
     InteractionUI.lua   -- Feed button + food menu
+    ShopUI.lua           -- Gamepasses/Boosts/Cosmetics/Currency shop
+    MutationLabUI.lua    -- gated Influence analysis panel
     EvolutionReveal.lua -- the evolution reveal popup
     Notifications.lua   -- toast messages
     Init.client.lua      -- wires up the above
@@ -83,9 +96,31 @@ src/
 - Leave and rejoin: your habitat assignment, Pip's stage, influences, and
   (if it happened) evolution should all still be there.
 
+## Monetization setup
+
+Every Gamepass and Developer Product Id in `MonetizationConfig.lua` is a
+placeholder (`0`). To test real purchase flows:
+
+1. In the Creator Dashboard for this experience, create a Gamepass or
+   Developer Product matching each entry (see `MonetizationConfig.lua` for
+   names/descriptions).
+2. Paste the real numeric Id into that entry's `Id` field. Nothing else
+   needs to change — every service reads Ids from this one file.
+3. Until real Ids are set, `ShopUI` buttons for that item still render (so
+   you can see the shop's layout) but pressing them shows a "not set up
+   yet" notice instead of opening a purchase prompt.
+
+Testing without spending real Robux: use Studio's `MarketplaceService`
+test mode, or temporarily grant `profile.OwnedGamepasses[key] = true` /
+call `BoostService.Grant` from the command bar to exercise the gated
+behavior directly.
+
 ## Current scope
 
-See `GAME_DESIGN.md` → "MVP Scope" and "Explicitly Not Built Yet". In
-short: this proves DISCOVER → RAISE → INFLUENCE → GROW → first EVOLVE.
-Trading, events, multiple currencies, and monetization are intentionally
-not built yet.
+See `GAME_DESIGN.md` → "MVP Scope", "Monetization Phase Status", and
+"Explicitly Not Built Yet". In short: the free loop proves
+DISCOVER → RAISE → INFLUENCE → GROW → first EVOLVE, and Monetization
+Phases 1-4 (Luck/Growth boosts, Extra Slots, VIP Habitat, Cosmetics,
+Auto-Care, Mutation Lab, gem packs, timed boosts) are layered on top of it
+without changing that loop. Trading, live events, mutation items, evolution
+reroll, and premium habitat themes are schema-only stubs or not built yet.

@@ -8,6 +8,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CritterDefinitions = require(ReplicatedStorage.Config.CritterDefinitions)
 local DataManager = require(script.Parent.DataManager)
+local CritterSlotService = require(script.Parent.CritterSlotService)
+local CosmeticService = require(script.Parent.CosmeticService)
 
 local CritterService = {}
 
@@ -158,21 +160,24 @@ local function buildCritterModel(record)
 
 	buildEyes(body, bodyRadius)
 	buildAccessory(body, bodyRadius, definition.AccessoryShape, definition.AccessoryColor)
+	CosmeticService.Attach(model, record.EquippedCosmetic)
 
 	return model
 end
 
 -- Grants a fresh Pip if the player doesn't already have an active Critter.
--- Called once per join; safe to call on a returning player (no-op).
+-- Called once per join; safe to call on a returning player (no-op). Goes
+-- through CritterSlotService like every other Critter grant would, even
+-- though the base slot count guarantees room for a first Critter today.
 function CritterService.GrantStarterPipIfNeeded(profile)
 	if profile.ActiveCritterUid then
 		return
 	end
 
-	local uid = DataManager.NewCritterUid(profile)
-	local record = DataManager.DefaultCritterRecord("pip", "Pip")
-	profile.Critters[uid] = record
-	profile.ActiveCritterUid = uid
+	local uid = CritterSlotService.AddCritter(profile, "pip", "Pip")
+	if uid then
+		profile.ActiveCritterUid = uid
+	end
 end
 
 function CritterService.GetActiveCritter(profile)

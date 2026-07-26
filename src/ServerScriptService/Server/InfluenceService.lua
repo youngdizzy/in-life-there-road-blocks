@@ -2,11 +2,13 @@
 -- server-validated (cooldowns, valid ids) -- the client only ever tells
 -- the server *which* food or zone it picked, never an amount or an effect.
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local FoodConfig = require(ReplicatedStorage.Config.FoodConfig)
 local EnvironmentConfig = require(ReplicatedStorage.Config.EnvironmentConfig)
 local GrowthConfig = require(ReplicatedStorage.Config.GrowthConfig)
+local MonetizationConfig = require(ReplicatedStorage.Config.MonetizationConfig)
 local Remotes = require(ReplicatedStorage.Modules.Remotes)
 
 local DataManager = require(script.Parent.DataManager)
@@ -14,6 +16,7 @@ local CritterService = require(script.Parent.CritterService)
 local GrowthService = require(script.Parent.GrowthService)
 local EvolutionService = require(script.Parent.EvolutionService)
 local StateService = require(script.Parent.StateService)
+local DiscoveryService = require(script.Parent.DiscoveryService)
 
 local InfluenceService = {}
 
@@ -29,6 +32,7 @@ end
 
 local function afterAction(player, profile, record)
 	if not record.EvolvedInto then
+		DiscoveryService.RollForDiscovery(player, profile, record)
 		EvolutionService.CheckAndEvolve(player, profile, record)
 	end
 	StateService.Push(player, profile)
@@ -60,7 +64,7 @@ local function handleFeed(player, foodId)
 	end
 
 	if not record.EvolvedInto then
-		GrowthService.AddGrowthPoints(record, food.GrowthPoints)
+		GrowthService.AddGrowthPoints(profile, record, food.GrowthPoints)
 	end
 
 	notify(player, ("%s happily ate the %s!"):format(record.Name, food.Name), "success")
@@ -95,11 +99,43 @@ function InfluenceService.HandlePlayAtZone(player, zoneId)
 	applyInfluences(record, zone.InfluenceEffects)
 
 	if not record.EvolvedInto then
-		GrowthService.AddGrowthPoints(record, zone.GrowthPoints)
+		GrowthService.AddGrowthPoints(profile, record, zone.GrowthPoints)
 	end
 
 	notify(player, ("%s loved playing at the %s!"):format(record.Name, zone.Name), "success")
 	afterAction(player, profile, record)
+end
+
+-- Auto-Care gamepass: periodically tops up Hunger/Happiness so a Critter
+-- is never neglected between sessions. Deliberately does NOT grant Growth
+-- Points -- meaningful progress still requires the player to actually pick
+-- foods and zones (see the monetization spec: "should still need to
+-- interact with and raise the Critter").
+local function runAutoCareTick()
+	for _, player in ipairs(Players:GetPlayers()) do
+		local profile = DataManager.GetProfile(player)
+		if profile and profile.OwnedGamepasses["AutoCare"] then
+			local record = CritterService.GetActiveCritter(profile)
+			if record then
+				local before = record.Hunger + record.Happiness
+				record.Hunger = math.min(GrowthConfig.MaxHunger, record.Hunger + MonetizationConfig.AutoCare.HungerRestore)
+				record.Happiness =
+					math.min(GrowthConfig.MaxHappiness, record.Happiness + MonetizationConfig.AutoCare.HappinessRestore)
+				if record.Hunger + record.Happiness ~= before then
+					StateService.Push(player, profile)
+				end
+			end
+		end
+	end
+end
+
+function InfluenceService.StartAutoCareLoop()
+	task.spawn(function()
+		while true do
+			task.wait(MonetizationConfig.AutoCare.IntervalSeconds)
+			runAutoCareTick()
+		end
+	end)
 end
 
 function InfluenceService.Init()
