@@ -17,6 +17,47 @@ local HabitatBuilder = {}
 local ZONE_ORDER = { "fire_corner", "water_pool", "nature_patch", "shadow_nook" }
 local ZONE_ANGLES = { 45, 135, 225, 315 } -- degrees, spread evenly around the pedestal
 
+-- Global lighting/atmosphere tuning -- entirely property values and two
+-- procedural instances (Atmosphere, ColorCorrection), zero external asset
+-- Ids, so nothing here can ever render as a broken/missing texture. This
+-- is the single highest-impact, lowest-risk visual change available in
+-- this environment: Roblox's own default Lighting is intentionally flat,
+-- and a "polished Roblox game" reads as such mostly through grading, not
+-- geometry. Future = nicer soft lighting than the default ShadowMap
+-- technology, at some GPU cost; revisit if this ever needs to run well on
+-- low-end/mobile devices.
+local function configureLighting()
+	local Lighting = game:GetService("Lighting")
+
+	Lighting.Technology = Enum.Technology.Future
+	Lighting.Brightness = 2.5
+	Lighting.ClockTime = 14.5
+	Lighting.GeographicLatitude = 30
+	Lighting.Ambient = Color3.fromRGB(95, 100, 115)
+	Lighting.OutdoorAmbient = Color3.fromRGB(120, 125, 130)
+	Lighting.ColorShift_Top = Color3.fromRGB(255, 244, 224)
+	Lighting.ColorShift_Bottom = Color3.fromRGB(205, 215, 235)
+	Lighting.EnvironmentDiffuseScale = 1
+	Lighting.EnvironmentSpecularScale = 1
+
+	local atmosphere = Instance.new("Atmosphere")
+	atmosphere.Density = 0.28
+	atmosphere.Offset = 0.2
+	atmosphere.Color = Color3.fromRGB(199, 199, 199)
+	atmosphere.Decay = Color3.fromRGB(110, 120, 140)
+	atmosphere.Glare = 0.15
+	atmosphere.Haze = 1.1
+	atmosphere.Parent = Lighting
+
+	local colorCorrection = Instance.new("ColorCorrectionEffect")
+	colorCorrection.Name = "WorldGrade"
+	colorCorrection.Brightness = 0.02
+	colorCorrection.Contrast = 0.08
+	colorCorrection.Saturation = 0.14
+	colorCorrection.TintColor = Color3.fromRGB(255, 250, 244)
+	colorCorrection.Parent = Lighting
+end
+
 local function newPart(props)
 	local part = Instance.new("Part")
 	part.Anchored = true
@@ -28,7 +69,21 @@ local function newPart(props)
 	return part
 end
 
+-- A single, small "welcome mat" under the pedestal -- one deliberate touch
+-- of coziness, not a decorating system. Sits flush with the platform so it
+-- reads as a rug, not another step.
 local function buildPedestal(plotModel, platformCFrame)
+	newPart({
+		Name = "Rug",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.1, 7, 7),
+		Color = Color3.fromRGB(200, 110, 90),
+		Material = Enum.Material.Fabric,
+		CanCollide = false,
+		CFrame = platformCFrame * CFrame.new(0, 1.05, 0) * CFrame.Angles(0, 0, math.rad(90)),
+		Parent = plotModel,
+	})
+
 	local pedestal = newPart({
 		Name = "Pedestal",
 		Size = Vector3.new(5, 1, 5),
@@ -38,6 +93,156 @@ local function buildPedestal(plotModel, platformCFrame)
 		Parent = plotModel,
 	})
 	return pedestal
+end
+
+-- Turns each Environment Zone from a flat colored pad into a small themed
+-- landmark -- logs and embers, pool rocks, a cluster of bushes and
+-- flowers, a shadowy rock nook -- so it reads as "a place," not a tile.
+-- Kept sparing (a handful of parts + one ambient particle per zone) on
+-- purpose, per "do not fill the map with random decorations that have no
+-- purpose": every prop here belongs to the one zone it's decorating.
+local function buildZoneDecoration(plotModel, zonePart, zoneId)
+	if zoneId == "fire_corner" then
+		for i = 1, 3 do
+			local angle = math.rad(i * 70)
+			local log = newPart({
+				Name = "Log" .. i,
+				Size = Vector3.new(0.5, 0.5, 2.6),
+				Material = Enum.Material.Wood,
+				Color = Color3.fromRGB(92, 62, 42),
+				CanCollide = false,
+				CFrame = zonePart.CFrame * CFrame.new(0, 0.7, 0) * CFrame.Angles(0, angle, math.rad(18)),
+				Parent = plotModel,
+			})
+		end
+
+		local emberLight = Instance.new("PointLight")
+		emberLight.Color = Color3.fromRGB(255, 150, 60)
+		emberLight.Range = 14
+		emberLight.Brightness = 2.5
+		emberLight.Parent = zonePart
+
+		local emitter = Instance.new("ParticleEmitter")
+		emitter.Color = ColorSequence.new(Color3.fromRGB(255, 170, 70))
+		emitter.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 0) })
+		emitter.Transparency =
+			NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) })
+		emitter.Lifetime = NumberRange.new(0.8, 1.4)
+		emitter.Speed = NumberRange.new(2, 4)
+		emitter.Acceleration = Vector3.new(0, 6, 0)
+		emitter.SpreadAngle = Vector2.new(20, 20)
+		emitter.Rate = 6
+		emitter.Parent = zonePart
+	elseif zoneId == "water_pool" then
+		for i = 1, 6 do
+			local angle = math.rad(i * 60)
+			newPart({
+				Name = "PoolRock" .. i,
+				Shape = Enum.PartType.Ball,
+				Size = Vector3.new(0.9, 0.7, 0.9),
+				Material = Enum.Material.Slate,
+				Color = Color3.fromRGB(120, 120, 125),
+				CanCollide = false,
+				CFrame = zonePart.CFrame * CFrame.new(math.cos(angle) * 2.6, 0, math.sin(angle) * 2.6),
+				Parent = plotModel,
+			})
+		end
+
+		local emitter = Instance.new("ParticleEmitter")
+		emitter.Color = ColorSequence.new(Color3.fromRGB(210, 235, 250))
+		emitter.Size =
+			NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.15), NumberSequenceKeypoint.new(1, 0.05) })
+		emitter.Transparency =
+			NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) })
+		emitter.Lifetime = NumberRange.new(1, 1.8)
+		emitter.Speed = NumberRange.new(0.5, 1)
+		emitter.Acceleration = Vector3.new(0, 2, 0)
+		emitter.SpreadAngle = Vector2.new(180, 180)
+		emitter.Rate = 4
+		emitter.Parent = zonePart
+	elseif zoneId == "nature_patch" then
+		for i = 1, 3 do
+			local angle = math.rad(i * 110)
+			newPart({
+				Name = "Bush" .. i,
+				Shape = Enum.PartType.Ball,
+				Size = Vector3.new(1.4, 1.2, 1.4),
+				Material = Enum.Material.Grass,
+				Color = Color3.fromRGB(70, 130, 60),
+				CanCollide = false,
+				CFrame = zonePart.CFrame * CFrame.new(math.cos(angle) * 2.4, 0.4, math.sin(angle) * 2.4),
+				Parent = plotModel,
+			})
+		end
+
+		for i = 1, 2 do
+			local angle = math.rad(i * 160 + 40)
+			local stem = newPart({
+				Name = "FlowerStem" .. i,
+				Size = Vector3.new(0.15, 1, 0.15),
+				Material = Enum.Material.Grass,
+				Color = Color3.fromRGB(80, 140, 70),
+				CanCollide = false,
+				CFrame = zonePart.CFrame * CFrame.new(math.cos(angle) * 2, 0.5, math.sin(angle) * 2),
+				Parent = plotModel,
+			})
+
+			newPart({
+				Name = "FlowerBloom" .. i,
+				Shape = Enum.PartType.Ball,
+				Size = Vector3.new(0.5, 0.5, 0.5),
+				Material = Enum.Material.Neon,
+				Color = i == 1 and Color3.fromRGB(255, 210, 90) or Color3.fromRGB(240, 140, 190),
+				CanCollide = false,
+				CFrame = stem.CFrame * CFrame.new(0, 0.6, 0),
+				Parent = plotModel,
+			})
+		end
+
+		local emitter = Instance.new("ParticleEmitter")
+		emitter.Color = ColorSequence.new(Color3.fromRGB(180, 230, 150))
+		emitter.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.15), NumberSequenceKeypoint.new(1, 0) })
+		emitter.Transparency =
+			NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) })
+		emitter.Lifetime = NumberRange.new(1.4, 2.2)
+		emitter.Speed = NumberRange.new(0.3, 0.7)
+		emitter.Acceleration = Vector3.new(0, -0.5, 0)
+		emitter.SpreadAngle = Vector2.new(180, 180)
+		emitter.Rate = 3
+		emitter.Parent = zonePart
+	elseif zoneId == "shadow_nook" then
+		for i = 1, 2 do
+			local side = i == 1 and -1 or 1
+			newPart({
+				Name = "NookRock" .. i,
+				Shape = Enum.PartType.Block,
+				Size = Vector3.new(1, 2.4, 1.6),
+				Material = Enum.Material.Slate,
+				Color = Color3.fromRGB(45, 42, 55),
+				CanCollide = false,
+				CFrame = zonePart.CFrame * CFrame.new(side * 2, 1, -0.5) * CFrame.Angles(0, math.rad(side * 20), 0),
+				Parent = plotModel,
+			})
+		end
+
+		local glowLight = Instance.new("PointLight")
+		glowLight.Color = Color3.fromRGB(160, 100, 220)
+		glowLight.Range = 12
+		glowLight.Brightness = 1.5
+		glowLight.Parent = zonePart
+
+		local emitter = Instance.new("ParticleEmitter")
+		emitter.Color = ColorSequence.new(Color3.fromRGB(140, 100, 200))
+		emitter.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 0) })
+		emitter.Transparency =
+			NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 1) })
+		emitter.Lifetime = NumberRange.new(1.2, 2)
+		emitter.Speed = NumberRange.new(0.5, 1)
+		emitter.Acceleration = Vector3.new(0, 1.5, 0)
+		emitter.SpreadAngle = Vector2.new(30, 30)
+		emitter.Rate = 3
+		emitter.Parent = zonePart
+	end
 end
 
 local function buildZone(plotModel, platformCFrame, zoneId, angleDegrees)
@@ -83,6 +288,8 @@ local function buildZone(plotModel, platformCFrame, zoneId, angleDegrees)
 	prompt.MaxActivationDistance = 10
 	prompt.RequiresLineOfSight = false
 	prompt.Parent = zonePart
+
+	buildZoneDecoration(plotModel, zonePart, zoneId)
 
 	return zonePart
 end
@@ -157,6 +364,8 @@ end
 
 function HabitatBuilder.Build()
 	local workspace = game:GetService("Workspace")
+
+	configureLighting()
 
 	local totalWidth = HabitatConfig.GridColumns * (HabitatConfig.PlotSize.X + HabitatConfig.PlotSpacing)
 	local totalDepth = HabitatConfig.GridRows * (HabitatConfig.PlotSize.Y + HabitatConfig.PlotSpacing)

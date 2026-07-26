@@ -84,15 +84,29 @@ function EvolutionService.CheckAndEvolve(player, profile, record)
 		},
 	})
 
+	-- The presentation sequence: the triggering Feed/Play/Item action
+	-- already played its own reaction moments ago (see InfluenceService/
+	-- MutationItemService) -- that's "Pip reacts." From here: a short
+	-- buildup on the *outgoing* model, then the swap + burst together, then
+	-- the reveal popup. "Do not make the sequence too long" -- the buildup
+	-- is under 2 seconds and this whole function only runs once per
+	-- evolution, ever, for a given Critter.
+	local plot = HabitatManager.GetHabitatForOwner(player.UserId)
+	if plot then
+		local buildupSeconds = CritterService.PlayEvolutionBuildup(plot, definition.HeadNubColor)
+		if buildupSeconds > 0 then
+			task.wait(buildupSeconds)
+		end
+	end
+
 	record.DefinitionId = outcomeId
 	record.EvolvedInto = outcomeId
 	record.Stage = "Evolved"
 	record.Name = definition.Name
 	DiscoveryLogService.MarkDiscovered(profile, outcomeId)
 
-	local plot = HabitatManager.GetHabitatForOwner(player.UserId)
 	if plot then
-		CritterService.PlayEvolutionEffect(plot, definition.AccessoryColor)
+		CritterService.PlayEvolutionEffect(plot, definition.HeadNubColor)
 		CritterService.RefreshVisual(plot, profile)
 	end
 
