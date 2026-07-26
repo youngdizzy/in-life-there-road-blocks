@@ -12,6 +12,7 @@ local Remotes = require(ReplicatedStorage.Modules.Remotes)
 local CritterService = require(script.Parent.CritterService)
 local GrowthService = require(script.Parent.GrowthService)
 local HabitatManager = require(script.Parent.HabitatManager)
+local DiscoveryLogService = require(script.Parent.DiscoveryLogService)
 
 local EvolutionService = {}
 
@@ -87,9 +88,11 @@ function EvolutionService.CheckAndEvolve(player, profile, record)
 	record.EvolvedInto = outcomeId
 	record.Stage = "Evolved"
 	record.Name = definition.Name
+	DiscoveryLogService.MarkDiscovered(profile, outcomeId)
 
 	local plot = HabitatManager.GetHabitatForOwner(player.UserId)
 	if plot then
+		CritterService.PlayEvolutionEffect(plot, definition.AccessoryColor)
 		CritterService.RefreshVisual(plot, profile)
 	end
 

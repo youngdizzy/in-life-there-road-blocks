@@ -148,7 +148,11 @@ function PipStatusUI.Init(playerGui)
 	Remotes.get("StateUpdate").OnClientEvent:Connect(function(state)
 		nameLabel.Text = state.Name
 		gemsLabel.Text = ("%d 💎"):format(state.Gems or 0)
-		stageLabel.Text = state.Evolved and "Evolved!" or state.Stage
+		local stageText = state.Evolved and "Evolved!" or state.Stage
+		if state.Mood then
+			stageText = ("%s   %s %s"):format(stageText, state.Mood.Emoji, state.Mood.Label)
+		end
+		stageLabel.Text = stageText
 		growthLabel.Text = state.Evolved and "Fully grown"
 			or ("Growth: %d / %d"):format(state.GrowthPoints, state.GrowthThreshold)
 		hungerFill.Size = UDim2.fromScale(math.clamp(state.Hunger / 100, 0, 1), 1)

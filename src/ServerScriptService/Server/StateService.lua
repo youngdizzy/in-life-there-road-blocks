@@ -15,6 +15,9 @@ local BoostService = require(script.Parent.BoostService)
 local CollectionService = require(script.Parent.CollectionService)
 local EventService = require(script.Parent.EventService)
 local HabitatThemeService = require(script.Parent.HabitatThemeService)
+local MoodService = require(script.Parent.MoodService)
+local DiscoveryLogService = require(script.Parent.DiscoveryLogService)
+local GoalService = require(script.Parent.GoalService)
 
 local StateService = {}
 
@@ -56,6 +59,7 @@ function StateService.Push(player, profile)
 		Happiness = record.Happiness,
 		Evolved = record.EvolvedInto ~= nil,
 		DominantHint = record.EvolvedInto == nil and GrowthService.GetDominantHint(record) or nil,
+		Mood = MoodService.GetMood(record),
 
 		Gems = profile.Gems,
 		Discoveries = profile.Discoveries,
@@ -71,6 +75,8 @@ function StateService.Push(player, profile)
 		ActiveEvents = activeEvents,
 		AvailableHabitatThemes = HabitatThemeService.GetAvailableThemes(profile),
 		SelectedHabitatTheme = profile.SelectedHabitatTheme,
+		DiscoveryLog = DiscoveryLogService.GetLog(profile),
+		Goals = GoalService.GetGoals(profile),
 	})
 end
 

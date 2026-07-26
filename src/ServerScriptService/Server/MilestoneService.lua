@@ -14,6 +14,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local GrowthConfig = require(ReplicatedStorage.Config.GrowthConfig)
 local Remotes = require(ReplicatedStorage.Modules.Remotes)
 local CritterSlotService = require(script.Parent.CritterSlotService)
+local DiscoveryLogService = require(script.Parent.DiscoveryLogService)
 
 local MilestoneService = {}
 
@@ -52,6 +53,7 @@ function MilestoneService.CheckFirstMilestone(player, profile, record)
 	end
 
 	profile.SecondCritterGranted = true
+	DiscoveryLogService.MarkDiscovered(profile, SECOND_CRITTER_DEFINITION_ID)
 	notify(
 		player,
 		("🎉 %s discovered a new friend! %s joined your collection (see Collection)."):format(

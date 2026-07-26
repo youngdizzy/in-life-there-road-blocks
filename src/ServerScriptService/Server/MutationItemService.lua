@@ -16,6 +16,7 @@ local InventoryService = require(script.Parent.InventoryService)
 local GrowthService = require(script.Parent.GrowthService)
 local EvolutionService = require(script.Parent.EvolutionService)
 local StateService = require(script.Parent.StateService)
+local HabitatManager = require(script.Parent.HabitatManager)
 
 local MutationItemService = {}
 
@@ -84,6 +85,10 @@ function MutationItemService.UseItem(player, itemId)
 	EvolutionService.CheckAndEvolve(player, profile, record)
 
 	notify(player, ("Used %s on %s."):format(item.Name, record.Name), "success")
+	local plot = HabitatManager.GetHabitatForOwner(player.UserId)
+	if plot then
+		CritterService.PlayReaction(plot, "Item")
+	end
 	StateService.Push(player, profile)
 end
 

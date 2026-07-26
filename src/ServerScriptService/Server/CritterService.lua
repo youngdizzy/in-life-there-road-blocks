@@ -4,18 +4,34 @@
 -- the player's Critter look like right now" and keeps that visual in sync
 -- with the profile.
 
+local TweenService = game:GetService("TweenService")
+local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CritterDefinitions = require(ReplicatedStorage.Config.CritterDefinitions)
 local DataManager = require(script.Parent.DataManager)
 local CritterSlotService = require(script.Parent.CritterSlotService)
 local CosmeticService = require(script.Parent.CosmeticService)
+local DiscoveryLogService = require(script.Parent.DiscoveryLogService)
 
 local CritterService = {}
 
 -- [plotIndex] = the currently spawned critter Model, so it can be cleanly
 -- destroyed/replaced on leave, rebirth-style resets (future), or evolution.
 local spawnedModels = {}
+
+-- [plotIndex] = the looping idle-bob Tween, so a reaction can pause/resume
+-- it instead of the two fighting over the same CFrame property.
+local idleTweens = {}
+
+-- Reaction particle colors/counts. Feed and Play read different entries
+-- here so "different actions get different reactions" is a data lookup,
+-- not copy-pasted animation code.
+local REACTION_CONFIG = {
+	Feed = { Color = Color3.fromRGB(255, 210, 120), Count = 10, Hop = false },
+	Play = { Color = Color3.fromRGB(150, 220, 255), Count = 16, Hop = true },
+	Item = { Color = Color3.fromRGB(200, 130, 230), Count = 14, Hop = false },
+}
 
 local STAGE_SCALE = {
 	Baby = 0.65,
@@ -129,6 +145,7 @@ local function buildCritterModel(record)
 	body.Size = Vector3.new(bodyDiameter, bodyDiameter, bodyDiameter)
 	body.Parent = model
 	model.PrimaryPart = body
+	body:SetAttribute("BaseColor", definition.BodyColor)
 
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "Info"
@@ -178,6 +195,7 @@ function CritterService.GrantStarterPipIfNeeded(profile)
 	local uid = CritterSlotService.AddCritter(profile, "pip", "Pip")
 	if uid then
 		profile.ActiveCritterUid = uid
+		DiscoveryLogService.MarkDiscovered(profile, "pip")
 	end
 end
 
@@ -186,6 +204,151 @@ function CritterService.GetActiveCritter(profile)
 		return nil
 	end
 	return profile.Critters[profile.ActiveCritterUid]
+end
+
+-- A slow, gentle bob so Pip reads as alive even when nothing is happening --
+-- not a walk cycle, just enough that it never looks like a frozen prop.
+-- Captured on body.CFrame *after* the model is placed in the world, so the
+-- "rest" position tweened around is wherever PivotTo actually put it.
+local function startIdleAnimation(plotIndex, body)
+	local restCFrame = body.CFrame
+	local tween = TweenService:Create(
+		body,
+		TweenInfo.new(1.6, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true),
+		{ CFrame = restCFrame * CFrame.new(0, 0.25, 0) }
+	)
+	tween:Play()
+	idleTweens[plotIndex] = { Tween = tween, RestCFrame = restCFrame }
+end
+
+local function stopIdleAnimation(plotIndex)
+	local entry = idleTweens[plotIndex]
+	if entry then
+		entry.Tween:Cancel()
+		idleTweens[plotIndex] = nil
+	end
+end
+
+-- Plays a short, visible reaction on the Critter currently on this plot's
+-- pedestal -- a color pulse plus a particle burst always, and a one-shot
+-- hop for the more energetic reactions (see REACTION_CONFIG). Safe to call
+-- even if nothing is spawned there (e.g. a stale/racing remote).
+function CritterService.PlayReaction(plot, reactionType)
+	local model = spawnedModels[plot.Index]
+	if not model then
+		return
+	end
+	local body = model.PrimaryPart
+	if not body then
+		return
+	end
+
+	local config = REACTION_CONFIG[reactionType]
+	if not config then
+		return
+	end
+
+	local baseColor = body:GetAttribute("BaseColor") or body.Color
+	local pulseUp = TweenService:Create(body, TweenInfo.new(0.12), { Color = config.Color })
+	local pulseDown = TweenService:Create(body, TweenInfo.new(0.4), { Color = baseColor })
+	pulseUp:Play()
+	pulseUp.Completed:Once(function()
+		pulseDown:Play()
+	end)
+
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Color = ColorSequence.new(config.Color)
+	emitter.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.25),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	emitter.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.1),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	emitter.Lifetime = NumberRange.new(0.5, 0.9)
+	emitter.Speed = NumberRange.new(3, 5)
+	emitter.SpreadAngle = Vector2.new(180, 180)
+	emitter.Rate = 0
+	emitter.Parent = body
+	emitter:Emit(config.Count)
+	Debris:AddItem(emitter, 2)
+
+	if config.Hop then
+		local idleEntry = idleTweens[plot.Index]
+		if idleEntry then
+			idleEntry.Tween:Pause()
+		end
+
+		local restCFrame = idleEntry and idleEntry.RestCFrame or body.CFrame
+		local hopUp = TweenService:Create(
+			body,
+			TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{ CFrame = restCFrame * CFrame.new(0, 1.1, 0) }
+		)
+		local hopDown = TweenService:Create(
+			body,
+			TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+			{ CFrame = restCFrame }
+		)
+		hopUp:Play()
+		hopUp.Completed:Once(function()
+			hopDown:Play()
+			hopDown.Completed:Once(function()
+				if idleEntry then
+					idleEntry.Tween:Play()
+				end
+			end)
+		end)
+	end
+end
+
+-- A bigger, showier burst than PlayReaction, timed to fire right as
+-- EvolutionService swaps the model -- "the environment reacts" (see
+-- GAME_DESIGN.md Phase 4), not just a UI popup. Colored to match the new
+-- form's own accessory color so the flash itself hints at the outcome
+-- concretely tied to what the player did, not a generic effect.
+function CritterService.PlayEvolutionEffect(plot, color)
+	color = color or Color3.fromRGB(255, 255, 255)
+	local originPart = plot.Pedestal
+
+	local flashPart = Instance.new("Part")
+	flashPart.Anchored = true
+	flashPart.CanCollide = false
+	flashPart.Transparency = 1
+	flashPart.Size = Vector3.new(1, 1, 1)
+	flashPart.CFrame = originPart.CFrame * CFrame.new(0, originPart.Size.Y / 2 + 2, 0)
+	flashPart.Parent = plot.Model
+
+	local light = Instance.new("PointLight")
+	light.Color = color
+	light.Range = 24
+	light.Brightness = 0
+	light.Parent = flashPart
+
+	TweenService:Create(light, TweenInfo.new(0.2), { Brightness = 8 }):Play()
+	task.delay(0.2, function()
+		TweenService:Create(light, TweenInfo.new(1.2), { Brightness = 0 }):Play()
+	end)
+
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Color = ColorSequence.new(color)
+	emitter.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.6),
+		NumberSequenceKeypoint.new(1, 0),
+	})
+	emitter.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	emitter.Lifetime = NumberRange.new(0.8, 1.4)
+	emitter.Speed = NumberRange.new(6, 12)
+	emitter.SpreadAngle = Vector2.new(180, 180)
+	emitter.Rate = 0
+	emitter.Parent = flashPart
+	emitter:Emit(40)
+
+	Debris:AddItem(flashPart, 3)
 end
 
 -- (Re)builds the active Critter's model on its habitat pedestal, replacing
@@ -203,9 +366,11 @@ function CritterService.RefreshVisual(plot, profile)
 	model:PivotTo(plot.Pedestal.CFrame * CFrame.new(0, plot.Pedestal.Size.Y / 2 + 2, 0))
 	model.Parent = plot.Model
 	spawnedModels[plot.Index] = model
+	startIdleAnimation(plot.Index, model.PrimaryPart)
 end
 
 function CritterService.ClearPlotVisual(plot)
+	stopIdleAnimation(plot.Index)
 	local existing = spawnedModels[plot.Index]
 	if existing then
 		existing:Destroy()

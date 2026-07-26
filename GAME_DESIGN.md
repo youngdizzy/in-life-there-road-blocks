@@ -220,12 +220,52 @@ change.
   Influence is clearly ahead — never exact numbers, never a spoiler.
 - At the Growth threshold, Pip evolves into Blazebit / Mossy / Nox /
   Ripple / the Secret outcome based on accumulated Influence, with a
-  rewarding reveal moment, and its habitat model updates permanently.
+  rewarding reveal moment (client popup **and** a world-visible light
+  flash + particle burst colored to the new form), and its habitat model
+  updates permanently.
 - The first time Pip reaches "Ready to Evolve," the player is granted a
-  second Critter (a first, deliberately small taste of COLLECT) and can
-  switch which Critter is active from the Collection panel.
+  second Critter (Mossy — a first, deliberately small taste of COLLECT)
+  and can switch which Critter is active from the Collection panel.
+- A small Bestiary (`DiscoveryLogService`) records which of the 6 real
+  Critters the player has ever discovered — undiscovered ones show as
+  "???" instead of their name.
+- A small, always-visible Goals checklist tells a new player what to do
+  next (feed, play, reach Juvenile, unlock the second Critter, discover an
+  evolution, find a Mutation Item) without a quest system behind it.
 - All of the above persists through DataStore save/load, including quick
   leave/rejoin.
+
+## Making Pip Feel Alive
+
+A model standing still with a progress bar over its head is not "raising a
+creature" — see the Phase 1 audit that drove this section. Concretely, Pip
+(and every Critter) now has:
+
+- **Idle animation.** A continuous, gentle bob (`CritterService`'s
+  idle Tween) so it never reads as a frozen prop, even doing nothing.
+- **Distinct reactions per action** (`CritterService.PlayReaction`): Feed
+  triggers a warm color pulse + a small particle burst; Play triggers a
+  cooler pulse, a bigger particle burst, *and* a one-shot hop (paused/
+  resumed around the idle bob, not fighting it); using a Mutation Item
+  gets its own purple-tinted pulse. Different actions visibly feel
+  different, on purpose.
+- **A Mood**, computed server-side from real Hunger/Happiness/Growth
+  state (`MoodService`) and shown prominently in the status panel:
+  Hungry, Tired, Growing (close to evolving), Excited, Happy, or Curious.
+  Not a new hidden simulator — just a few clear buckets over numbers that
+  already exist, so "how is Pip doing?" has an answer at a glance.
+- **A personal habitat with an edge.** A low perimeter fence marks the
+  platform as the player's own space (`HabitatBuilder.buildPerimeterFence`)
+  — small, not a decorating system.
+
+Which food/zone affects which Influence is also no longer something the
+player has to infer from flavor text alone: the Feed menu tags each food
+with its Influence (🔥/💧/🌿), and zone billboards carry the same icon.
+Mystery Mushroom is the one deliberate exception — it's tagged "❓"
+instead, matching its own secretive flavor. The exact eventual *outcome*
+stays a mystery; *what nudges what* does not (see GAME_DESIGN.md's own
+"Mystery should come from the exact form, not from having no idea what
+anything does").
 
 ## Monetization Philosophy
 
@@ -310,6 +350,42 @@ fun**:
   a large catalog of item *types* built on top of it yet)
 - Evolution reroll/second-chance (the snapshot data exists; nothing
   consumes it yet — see Phase 5b above)
+- A shared central hub with themed public destinations (see "Core Loop Fun
+  Audit" below — deliberately deprioritized this round)
+- A scripted first-session tutorial/onboarding sequence (see "Core Loop Fun
+  Audit" below — deliberately deprioritized this round)
+
+## Core Loop Fun Audit
+
+Before adding anything, the standing question was re-asked: **if every
+Robux purchase were removed, is raising a Critter still fun?** The honest
+gaps found — and what was done about each:
+
+| Gap found | Fix |
+|---|---|
+| Pip was a static model with a floating progress bar — no idle motion, no reaction to being fed/played with, no readable "how is it doing" | Idle bob, distinct Feed/Play/Item reactions, and a server-computed Mood (see "Making Pip Feel Alive" above) |
+| Which food/zone affects which Influence was only inferable from flavor text | Explicit Influence tags in the Feed menu and on zone billboards |
+| Evolution was a UI popup with nothing happening in the world | A world-visible light flash + particle burst, colored to the outcome, fires at the moment of transformation |
+| No sense of "discovered vs. still a mystery" across Critters as a whole | A 6-entry Bestiary (`DiscoveryLogService`) — undiscovered species show as "???" |
+| A new player had no persistent answer to "what should I do next" | A small, always-visible Goals checklist (`GoalService`), derived from existing state, no new progression system |
+| The habitat didn't visually read as "mine" | A low perimeter fence per habitat |
+
+**Deliberately not built this round**, and why:
+
+- **A shared central hub with themed destinations** (the brief's "Meadow /
+  Ember Zone / Tidepool / Gloom Grove" idea). Each personal habitat
+  already has all four Environment Zones — a second, public copy of the
+  same mechanic adds world surface area without adding depth to the
+  actual raising loop, and the brief itself warns against "a massive open
+  world with nothing to do." This is a reasonable next step once the loop
+  above is confirmed fun in practice, not before.
+- **A scripted first-10-minutes tutorial.** A popup-driven onboarding
+  sequence is exactly the kind of "system that isn't connected to
+  gameplay" Development Principle #10 warns about. The fixes above (an
+  alive, reactive Pip; visible Influence tags; an always-on Goals list)
+  are meant to make the first session legible *without* a scripted
+  walkthrough — see "Biggest remaining gameplay problem" in the delivery
+  report for whether that actually held up once tested in Studio.
 
 ## Development Principles
 

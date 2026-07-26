@@ -12,6 +12,31 @@ local InteractionUI = {}
 
 local FOOD_ORDER = { "plain_kibble", "spicy_pepper", "kelp_snack", "berry_mix", "mystery_mushroom" }
 
+-- Which Influence a food nudges is never hidden data (FoodConfig lives in
+-- ReplicatedStorage, readable by the client already) -- this just makes it
+-- legible in the menu instead of something the player has to infer from
+-- flavor text. See GAME_DESIGN.md Phase 2: "the player should understand
+-- enough to make decisions" -- mystery should be about the eventual form,
+-- not about which food does what. Mystery Mushroom is the one deliberate
+-- exception: its tag is itself a "❓" instead of naming its Influence,
+-- matching its own "not sure where this came from" flavor.
+local INFLUENCE_TAGS = {
+	Fire = "🔥 Fire",
+	Water = "💧 Water",
+	Nature = "🌿 Nature",
+	Shadow = "🌑 Shadow",
+}
+
+local function influenceTagFor(food)
+	if food.IsMysterious then
+		return "❓ ?"
+	end
+	for influenceType in pairs(food.InfluenceEffects) do
+		return INFLUENCE_TAGS[influenceType] or influenceType
+	end
+	return nil
+end
+
 local function corner(parent, radius)
 	local c = Instance.new("UICorner")
 	c.CornerRadius = UDim.new(0, radius or 10)
@@ -106,7 +131,7 @@ function InteractionUI.Init(playerGui)
 		corner(row, 8)
 
 		local nameLabel = Instance.new("TextLabel")
-		nameLabel.Size = UDim2.new(1, -20, 0.55, 0)
+		nameLabel.Size = UDim2.new(0.7, -20, 0.55, 0)
 		nameLabel.Position = UDim2.fromOffset(14, 4)
 		nameLabel.BackgroundTransparency = 1
 		nameLabel.Text = food.Name
@@ -115,6 +140,20 @@ function InteractionUI.Init(playerGui)
 		nameLabel.TextScaled = true
 		nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 		nameLabel.Parent = row
+
+		local tag = influenceTagFor(food)
+		if tag then
+			local tagLabel = Instance.new("TextLabel")
+			tagLabel.Size = UDim2.new(0.3, -14, 0.55, 0)
+			tagLabel.Position = UDim2.new(0.7, 0, 0, 4)
+			tagLabel.BackgroundTransparency = 1
+			tagLabel.Text = tag
+			tagLabel.TextColor3 = Color3.fromRGB(220, 220, 225)
+			tagLabel.Font = Enum.Font.GothamBold
+			tagLabel.TextScaled = true
+			tagLabel.TextXAlignment = Enum.TextXAlignment.Right
+			tagLabel.Parent = row
+		end
 
 		local descLabel = Instance.new("TextLabel")
 		descLabel.Size = UDim2.new(1, -20, 0.4, 0)

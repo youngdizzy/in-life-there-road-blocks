@@ -20,11 +20,19 @@ local StateService = require(script.Parent.StateService)
 local DiscoveryService = require(script.Parent.DiscoveryService)
 local MilestoneService = require(script.Parent.MilestoneService)
 local EventService = require(script.Parent.EventService)
+local HabitatManager = require(script.Parent.HabitatManager)
 
 local InfluenceService = {}
 
 local function notify(player, message, kind)
 	Remotes.get("Notify"):FireClient(player, { Text = message, Kind = kind or "info" })
+end
+
+local function playReaction(player, reactionType)
+	local plot = HabitatManager.GetHabitatForOwner(player.UserId)
+	if plot then
+		CritterService.PlayReaction(plot, reactionType)
+	end
 end
 
 local function applyInfluences(record, effects)
@@ -82,6 +90,7 @@ local function handleFeed(player, foodId)
 	end
 
 	notify(player, ("%s happily ate the %s!"):format(record.Name, food.Name), "success")
+	playReaction(player, "Feed")
 	afterAction(player, profile, record)
 end
 
@@ -117,6 +126,7 @@ function InfluenceService.HandlePlayAtZone(player, zoneId)
 	end
 
 	notify(player, ("%s loved playing at the %s!"):format(record.Name, zone.Name), "success")
+	playReaction(player, "Play")
 	afterAction(player, profile, record)
 end
 

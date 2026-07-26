@@ -76,6 +76,9 @@ function DataManager.DefaultProfile()
 		ProcessedReceipts = {}, -- purchaseIds already granted, see MonetizationService.ProcessReceipt
 		EventProgress = {}, -- [eventId] = { RewardClaimed = bool }, see EventService
 		SelectedHabitatTheme = "default", -- see HabitatThemeService
+		DiscoveredSpecies = {}, -- [definitionId] = true, see DiscoveryLogService. Distinct from
+		-- `Discoveries` above (the Rare Discovery item-find counter) -- unfortunate near-miss in
+		-- naming history, kept because renaming Discoveries now would just churn every save file.
 	}
 end
 
