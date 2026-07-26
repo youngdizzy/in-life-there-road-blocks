@@ -68,7 +68,7 @@ local function buildZone(plotModel, platformCFrame, zoneId, angleDegrees)
 	local label = Instance.new("TextLabel")
 	label.Size = UDim2.fromScale(1, 1)
 	label.BackgroundTransparency = 1
-	label.Text = zoneConfig.Name
+	label.Text = zoneConfig.Icon and (zoneConfig.Icon .. " " .. zoneConfig.Name) or zoneConfig.Name
 	label.TextColor3 = Color3.new(1, 1, 1)
 	label.TextStrokeTransparency = 0
 	label.Font = Enum.Font.GothamBold
@@ -85,6 +85,44 @@ local function buildZone(plotModel, platformCFrame, zoneId, angleDegrees)
 	prompt.Parent = zonePart
 
 	return zonePart
+end
+
+-- A low perimeter fence around the platform edge -- just enough that a
+-- habitat reads as "this is MY space" (see GAME_DESIGN.md Phase 6), not a
+-- decorating system. Non-collide so it never blocks the player or the
+-- Environment Zones (which sit well inside it).
+local FENCE_HEIGHT = 1.5
+local FENCE_THICKNESS = 0.4
+
+local function buildPerimeterFence(plotModel, platformCFrame)
+	local halfX = HabitatConfig.PlotSize.X / 2
+	local halfZ = HabitatConfig.PlotSize.Y / 2
+	local railY = 1 + FENCE_HEIGHT / 2 -- platform top (Size.Y/2 = 1) plus half the fence's own height
+
+	local rails = {
+		{ Size = Vector3.new(HabitatConfig.PlotSize.X, FENCE_HEIGHT, FENCE_THICKNESS), Offset = CFrame.new(0, railY, halfZ) },
+		{
+			Size = Vector3.new(HabitatConfig.PlotSize.X, FENCE_HEIGHT, FENCE_THICKNESS),
+			Offset = CFrame.new(0, railY, -halfZ),
+		},
+		{ Size = Vector3.new(FENCE_THICKNESS, FENCE_HEIGHT, HabitatConfig.PlotSize.Y), Offset = CFrame.new(halfX, railY, 0) },
+		{
+			Size = Vector3.new(FENCE_THICKNESS, FENCE_HEIGHT, HabitatConfig.PlotSize.Y),
+			Offset = CFrame.new(-halfX, railY, 0),
+		},
+	}
+
+	for i, rail in ipairs(rails) do
+		newPart({
+			Name = "FenceRail" .. i,
+			Size = rail.Size,
+			Color = Color3.fromRGB(120, 90, 60),
+			Material = Enum.Material.WoodPlanks,
+			CanCollide = false,
+			CFrame = platformCFrame * rail.Offset,
+			Parent = plotModel,
+		})
+	end
 end
 
 local function buildOwnerSign(plotModel, platformCFrame)
@@ -174,6 +212,7 @@ function HabitatBuilder.Build()
 				Parent = plotModel,
 			})
 
+			buildPerimeterFence(plotModel, platformCFrame)
 			local pedestal = buildPedestal(plotModel, platformCFrame)
 
 			local zones = {}

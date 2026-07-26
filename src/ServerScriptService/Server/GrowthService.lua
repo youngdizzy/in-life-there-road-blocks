@@ -5,6 +5,9 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local GrowthConfig = require(ReplicatedStorage.Config.GrowthConfig)
+local MonetizationConfig = require(ReplicatedStorage.Config.MonetizationConfig)
+local CritterDefinitions = require(ReplicatedStorage.Config.CritterDefinitions)
+local BoostService = require(script.Parent.BoostService)
 
 local GrowthService = {}
 
@@ -15,9 +18,38 @@ local HINTS = {
 	Shadow = "Pip's gotten a little quieter, a little stranger...",
 }
 
-function GrowthService.AddGrowthPoints(record, points)
-	record.GrowthPoints += points
-	record.Stage = GrowthConfig.GetStage(record.GrowthPoints)
+-- Additive stacking over a base of 1.0 (see MonetizationConfig.Growth), same
+-- reasoning as LuckService: a permanent gamepass plus a temporary boost
+-- should never compound into an ever-climbing multiplier.
+function GrowthService.GetGrowthMultiplier(profile)
+	local multiplier = 1.0
+
+	if profile.OwnedGamepasses["GrowthBoost"] then
+		multiplier += MonetizationConfig.Growth.GamepassBonus
+	end
+
+	if BoostService.IsActive(profile, "GrowthBoost") then
+		multiplier += MonetizationConfig.Growth.BoostBonus
+	end
+
+	return multiplier
+end
+
+-- basePoints is the raw, un-boosted amount a food/zone is worth (see
+-- FoodConfig/EnvironmentConfig) -- the multiplier is applied here, once,
+-- so no caller ever has to remember to multiply it in themselves.
+function GrowthService.AddGrowthPoints(profile, record, basePoints)
+	record.GrowthPoints += basePoints * GrowthService.GetGrowthMultiplier(profile)
+
+	local definition = CritterDefinitions.Get(record.DefinitionId)
+	if not definition.EvolvesInto and record.GrowthPoints >= GrowthConfig.EvolveThreshold then
+		-- A species with nowhere left to evolve (e.g. a second Critter
+		-- granted directly as "mossy") just matures instead of sitting at
+		-- "Ready to Evolve" forever with nothing to evolve into.
+		record.Stage = "Mature"
+	else
+		record.Stage = GrowthConfig.GetStage(record.GrowthPoints)
+	end
 end
 
 function GrowthService.IsReadyToEvolve(record)

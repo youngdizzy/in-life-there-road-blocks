@@ -141,10 +141,12 @@ unrelated scripts. `CritterDefinitions.lua`, `FoodConfig.lua`, and
 The client is never trusted with currency, inventory, Critter ownership,
 evolution outcomes, or progression values. Concretely:
 
-- `FeedCritter` and `PlayAtZone` remotes carry only *which food/zone* the
-  player chose — the server looks up the effect from config, checks
-  cooldowns and inventory server-side, and mutates the profile itself.
-  The client cannot say "give me +50 Fire."
+- The `FeedCritter` remote carries only *which food* the player chose;
+  Play-at-a-Zone isn't a remote at all — it's a habitat ProximityPrompt the
+  server triggers directly, so the engine itself guarantees the triggering
+  player was physically there. Either way the server looks up the effect
+  from config, checks cooldowns server-side, and mutates the profile
+  itself. The client cannot say "give me +50 Fire."
 - Evolution is decided and executed entirely in `EvolutionService` on the
   server. The client only receives the *result* (`EvolutionReveal`) to
   animate.
@@ -158,23 +160,35 @@ Per-player profile (see `DataManager.DefaultProfile`):
 
 ```lua
 {
+    SchemaVersion,
     Critters = { [uid] = {
         DefinitionId, Name, GrowthPoints, Stage,
         Influences = { Fire, Water, Nature, Shadow },
         Hunger, Happiness,
         EvolvedInto, -- nil until evolution happens
+        EquippedCosmetic, -- cosmeticId or nil; per-Critter, not account-wide
+        EvolutionHistory, -- snapshots captured right before each evolution
     } },
     ActiveCritterUid, -- the one Critter the player is raising in v1
     Inventory = { [foodId] = count },
     HabitatIndex,
     NextCritterUid,
+
+    Gems,
+    Discoveries, -- count of Rare Discoveries found (see DiscoveryService)
+    OwnedGamepasses = { [gamepassKey] = true },
+    UnlockedCosmetics = { [cosmeticId] = true }, -- account-wide unlocks
+    ActiveBoosts = { [boostType] = { ExpiresAt } }, -- see BoostService
+    ProcessedReceipts, -- idempotency ring buffer, see MonetizationService
 }
 ```
 
 Designed to expand: multiple simultaneous Critters later just means
 iterating `Critters` instead of assuming one; `Inventory` already supports
 arbitrary future item types; nothing here assumes a single evolution or a
-single habitat forever.
+single habitat forever. `SchemaVersion` exists so a future field that needs
+a real migration (not just an additive default) has something to branch on
+— every change so far has been additive.
 
 **Reliability requirements:** loads retry on transient DataStore failure
 and fall back to defaults rather than blocking join; saves happen on
@@ -206,9 +220,115 @@ change.
   Influence is clearly ahead — never exact numbers, never a spoiler.
 - At the Growth threshold, Pip evolves into Blazebit / Mossy / Nox /
   Ripple / the Secret outcome based on accumulated Influence, with a
-  rewarding reveal moment, and its habitat model updates permanently.
+  rewarding reveal moment (client popup **and** a world-visible light
+  flash + particle burst colored to the new form), and its habitat model
+  updates permanently.
+- The first time Pip reaches "Ready to Evolve," the player is granted a
+  second Critter (Mossy — a first, deliberately small taste of COLLECT)
+  and can switch which Critter is active from the Collection panel.
+- A small Bestiary (`DiscoveryLogService`) records which of the 6 real
+  Critters the player has ever discovered — undiscovered ones show as
+  "???" instead of their name.
+- A small, always-visible Goals checklist tells a new player what to do
+  next (feed, play, reach Juvenile, unlock the second Critter, discover an
+  evolution, find a Mutation Item) without a quest system behind it.
 - All of the above persists through DataStore save/load, including quick
   leave/rejoin.
+
+## Making Pip Feel Alive
+
+A model standing still with a progress bar over its head is not "raising a
+creature" — see the Phase 1 audit that drove this section. Concretely, Pip
+(and every Critter) now has:
+
+- **Idle animation.** A continuous, gentle bob (`CritterService`'s
+  idle Tween) so it never reads as a frozen prop, even doing nothing.
+- **Distinct reactions per action** (`CritterService.PlayReaction`): Feed
+  triggers a warm color pulse + a small particle burst; Play triggers a
+  cooler pulse, a bigger particle burst, *and* a one-shot hop (paused/
+  resumed around the idle bob, not fighting it); using a Mutation Item
+  gets its own purple-tinted pulse. Different actions visibly feel
+  different, on purpose.
+- **A Mood**, computed server-side from real Hunger/Happiness/Growth
+  state (`MoodService`) and shown prominently in the status panel:
+  Hungry, Tired, Growing (close to evolving), Excited, Happy, or Curious.
+  Not a new hidden simulator — just a few clear buckets over numbers that
+  already exist, so "how is Pip doing?" has an answer at a glance.
+- **A personal habitat with an edge.** A low perimeter fence marks the
+  platform as the player's own space (`HabitatBuilder.buildPerimeterFence`)
+  — small, not a decorating system.
+
+Which food/zone affects which Influence is also no longer something the
+player has to infer from flavor text alone: the Feed menu tags each food
+with its Influence (🔥/💧/🌿), and zone billboards carry the same icon.
+Mystery Mushroom is the one deliberate exception — it's tagged "❓"
+instead, matching its own secretive flavor. The exact eventual *outcome*
+stays a mystery; *what nudges what* does not (see GAME_DESIGN.md's own
+"Mystery should come from the exact form, not from having no idea what
+anything does").
+
+## Monetization Philosophy
+
+> Players should spend because something is cool, convenient, collectible,
+> exclusive, or status-enhancing — not because the free game is
+> intentionally miserable.
+
+Concretely, that means:
+
+- **Every Gamepass/Developer Product Id lives in one file**
+  (`MonetizationConfig.lua`), as a placeholder until real ones are created
+  in the Creator Dashboard. Nothing else in the codebase hardcodes an Id.
+- **Luck and Growth Speed bonuses stack additively over a base of 1.0**
+  (see `LuckService`/`GrowthService`), never multiplicatively — a
+  permanent gamepass plus a temporary potion is a strong 3x, never a
+  runaway number. See `MonetizationConfig.Luck`/`.Growth`.
+- **Luck never guarantees a rare outcome.** It's applied to a capped
+  chance (`LuckService.ApplyToChance`, capped by
+  `MonetizationConfig.Discovery.MaxChance`), never to "skip the roll."
+- **Auto-Care and Growth Boost never remove the player's decisions.**
+  Auto-Care tops up Hunger/Happiness only — it never grants Growth Points,
+  so evolution always requires the player to actually choose foods/zones.
+  Growth Boost multiplies the Growth Points those *real* actions are
+  worth; it doesn't grant points on its own.
+- **The Mutation Lab gives more information, never the answer.** It shows
+  qualitative Influence strength ("strong", "faint", ...), never raw
+  numbers, and never names the eventual evolution outcome.
+- **Every purchase is server-validated.** Gamepass ownership is checked
+  with `MarketplaceService:UserOwnsGamePassAsync` and cached in
+  `profile.OwnedGamepasses`, never trusted from the client. Developer
+  product grants go through `ProcessReceipt` with an idempotency ring
+  buffer (`DataManager.ProcessedReceipts`) so a Roblox retry can never
+  grant something twice.
+- **A free player can still discover, raise, evolve, and progress.** See
+  "MVP Scope" — none of it requires spending.
+
+## Monetization Phase Status
+
+Built in the order the monetization spec asked for, so each phase lands on
+a working foundation rather than everything half-built at once. See
+`README.md` → "System status" for the full FUNCTIONAL/PARTIALLY
+FUNCTIONAL/SCHEMA ONLY/PLACEHOLDER breakdown of every individual system;
+this table is the phase-level summary.
+
+| Phase | Contents | Status |
+|---|---|---|
+| 1 | `MonetizationConfig`, gamepass ownership checking, 2x Luck, Growth Boost, `DiscoveryService` (first real luck-gated hook) | ✅ Functional |
+| 2 | Extra Critter Slots (`CritterSlotService`), second-Critter acquisition (`MilestoneService`), Critter Collection (`CollectionService`), VIP Habitat visual, Cosmetic effect system (`CosmeticService`, 2 real effects + 4 stubs) | ✅ Functional |
+| 3 | Auto-Care (`InfluenceService.StartAutoCareLoop`), Mutation Lab (`MutationLabService`) | ✅ Functional |
+| 4 | `ProcessReceipt`, gem packs, temporary Growth/Luck boosts (`BoostService`) | ✅ Functional |
+| 5 | Mystery Mutation Items (`InventoryService`, `MutationItemService`) | ✅ Functional — acquired via Rare Discoveries, consumed on a Critter, nudge real Influence |
+| 5b | Evolution reroll/second-chance | 🚧 Still just the snapshot hook (`EvolutionService.EvolutionHistory`); now also feeds the Mutation Lab's "previously seen" hint, but nothing consumes it for an actual reroll |
+| 6 | Limited-time event framework | ✅ Functional for one real event ("First Eclipse" / `eclipse`, manually toggled `Active = true`, real Shadow Influence bonus + claimable reward); the other three (`meteor`/`garden_festival`/`chaos_weekend`) remain schema-only stubs |
+| 7 | Habitat monetization (theme selection) | ✅ Functional for two real themes (`default`, `vip` — ownership-gated, selectable, persists); the six premium re-skin themes remain schema-only stubs with no render path |
+
+**Extra Critter Slots is now partially meaningful**: the base slot count is
+2 (room for Pip + the milestone-granted second Critter), and the gamepass's
+extra 3 slots are a real, enforced increase — but v1 still has no way to
+*fill* those extra slots (Rare Discoveries grant Mutation Items, not
+Critters). The gate (`CritterSlotService.AddCritter`) is the single
+sanctioned path any future acquisition system (a real egg/gacha system, more
+milestones, event Critters) would use, so extending this further doesn't
+require touching the gate itself.
 
 ## Explicitly Not Built Yet
 
@@ -217,16 +337,55 @@ real future pillars but are **out of scope until the above loop is proven
 fun**:
 
 - Trading between players
-- Large multiplayer live events
+- Multiple concurrent/scheduled live events (one real event runs; see Phase 6 above)
 - Multiple currencies
 - A large open world
 - Combat
 - A large Critter catalog (beyond the 5 fully-implemented + 4 stubs above)
-- Monetization of any kind (gamepasses, dev products, cosmetics-for-cash)
 - Battle passes
 - A large quest system
 - Complex crafting
-- A large inventory/item system beyond the small starter food menu
+- A large inventory/item system beyond the 5 Mutation Items (the inventory
+  itself is generic and real -- see `InventoryService` -- there's just not
+  a large catalog of item *types* built on top of it yet)
+- Evolution reroll/second-chance (the snapshot data exists; nothing
+  consumes it yet — see Phase 5b above)
+- A shared central hub with themed public destinations (see "Core Loop Fun
+  Audit" below — deliberately deprioritized this round)
+- A scripted first-session tutorial/onboarding sequence (see "Core Loop Fun
+  Audit" below — deliberately deprioritized this round)
+
+## Core Loop Fun Audit
+
+Before adding anything, the standing question was re-asked: **if every
+Robux purchase were removed, is raising a Critter still fun?** The honest
+gaps found — and what was done about each:
+
+| Gap found | Fix |
+|---|---|
+| Pip was a static model with a floating progress bar — no idle motion, no reaction to being fed/played with, no readable "how is it doing" | Idle bob, distinct Feed/Play/Item reactions, and a server-computed Mood (see "Making Pip Feel Alive" above) |
+| Which food/zone affects which Influence was only inferable from flavor text | Explicit Influence tags in the Feed menu and on zone billboards |
+| Evolution was a UI popup with nothing happening in the world | A world-visible light flash + particle burst, colored to the outcome, fires at the moment of transformation |
+| No sense of "discovered vs. still a mystery" across Critters as a whole | A 6-entry Bestiary (`DiscoveryLogService`) — undiscovered species show as "???" |
+| A new player had no persistent answer to "what should I do next" | A small, always-visible Goals checklist (`GoalService`), derived from existing state, no new progression system |
+| The habitat didn't visually read as "mine" | A low perimeter fence per habitat |
+
+**Deliberately not built this round**, and why:
+
+- **A shared central hub with themed destinations** (the brief's "Meadow /
+  Ember Zone / Tidepool / Gloom Grove" idea). Each personal habitat
+  already has all four Environment Zones — a second, public copy of the
+  same mechanic adds world surface area without adding depth to the
+  actual raising loop, and the brief itself warns against "a massive open
+  world with nothing to do." This is a reasonable next step once the loop
+  above is confirmed fun in practice, not before.
+- **A scripted first-10-minutes tutorial.** A popup-driven onboarding
+  sequence is exactly the kind of "system that isn't connected to
+  gameplay" Development Principle #10 warns about. The fixes above (an
+  alive, reactive Pip; visible Influence tags; an always-on Goals list)
+  are meant to make the first session legible *without* a scripted
+  walkthrough — see "Biggest remaining gameplay problem" in the delivery
+  report for whether that actually held up once tested in Studio.
 
 ## Development Principles
 

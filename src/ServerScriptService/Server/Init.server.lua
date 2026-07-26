@@ -13,6 +13,13 @@ local HabitatManager = require(script.Parent.HabitatManager)
 local CritterService = require(script.Parent.CritterService)
 local InfluenceService = require(script.Parent.InfluenceService)
 local StateService = require(script.Parent.StateService)
+local MonetizationService = require(script.Parent.MonetizationService)
+local MutationLabService = require(script.Parent.MutationLabService)
+local MutationItemService = require(script.Parent.MutationItemService)
+local CosmeticService = require(script.Parent.CosmeticService)
+local CollectionService = require(script.Parent.CollectionService)
+local EventService = require(script.Parent.EventService)
+local HabitatThemeService = require(script.Parent.HabitatThemeService)
 
 local function notify(player, message, kind)
 	Remotes.get("Notify"):FireClient(player, { Text = message, Kind = kind or "info" })
@@ -38,16 +45,45 @@ for _, plot in ipairs(plots) do
 end
 
 InfluenceService.Init()
+MonetizationService.Init()
+MutationLabService.Init()
+MutationItemService.Init()
+CollectionService.Init()
+EventService.Init()
+HabitatThemeService.Init()
+InfluenceService.StartAutoCareLoop()
+
+Remotes.get("EquipCosmetic").OnServerEvent:Connect(function(player, cosmeticId)
+	local profile = DataManager.GetProfile(player)
+	local record = profile and CritterService.GetActiveCritter(profile)
+	if not record then
+		return
+	end
+
+	if cosmeticId ~= nil and not CosmeticService.IsUnlocked(profile, cosmeticId) then
+		return
+	end
+
+	record.EquippedCosmetic = cosmeticId
+
+	local plot = HabitatManager.GetHabitatForOwner(player.UserId)
+	if plot then
+		CritterService.RefreshVisual(plot, profile)
+	end
+	StateService.Push(player, profile)
+end)
 
 -- 3. Player lifecycle.
 local function onPlayerAdded(player)
 	local profile = DataManager.LoadProfile(player)
+	MonetizationService.CheckOwnedGamepasses(player, profile)
 	CritterService.GrantStarterPipIfNeeded(profile)
 
 	local plot = HabitatManager.AssignHabitat(player, profile.HabitatIndex)
 	if plot then
 		profile.HabitatIndex = plot.Index
 		CritterService.RefreshVisual(plot, profile)
+		HabitatThemeService.ApplyToHabitat(player, profile)
 	else
 		notify(player, "The habitat grid is full right now, sorry! Try again shortly.", "warning")
 	end

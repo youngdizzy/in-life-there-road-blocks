@@ -7,6 +7,7 @@ EnvironmentConfig.Zones = {
 	fire_corner = {
 		Id = "fire_corner",
 		Name = "Fire Corner",
+		Icon = "🔥",
 		Description = "A small crackling campfire.",
 		InfluenceEffects = { Fire = 5 },
 		HappinessGain = 15,
@@ -16,6 +17,7 @@ EnvironmentConfig.Zones = {
 	water_pool = {
 		Id = "water_pool",
 		Name = "Water Pool",
+		Icon = "💧",
 		Description = "A shallow, cool pool.",
 		InfluenceEffects = { Water = 5 },
 		HappinessGain = 15,
@@ -25,6 +27,7 @@ EnvironmentConfig.Zones = {
 	nature_patch = {
 		Id = "nature_patch",
 		Name = "Nature Patch",
+		Icon = "🌿",
 		Description = "Overgrown, a little wild.",
 		InfluenceEffects = { Nature = 5 },
 		HappinessGain = 15,
@@ -34,6 +37,7 @@ EnvironmentConfig.Zones = {
 	shadow_nook = {
 		Id = "shadow_nook",
 		Name = "Shadow Nook",
+		Icon = "🌑",
 		Description = "Quiet. Colder than it should be.",
 		InfluenceEffects = { Shadow = 5 },
 		HappinessGain = 15,

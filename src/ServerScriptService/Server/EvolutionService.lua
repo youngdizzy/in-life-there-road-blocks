@@ -12,6 +12,7 @@ local Remotes = require(ReplicatedStorage.Modules.Remotes)
 local CritterService = require(script.Parent.CritterService)
 local GrowthService = require(script.Parent.GrowthService)
 local HabitatManager = require(script.Parent.HabitatManager)
+local DiscoveryLogService = require(script.Parent.DiscoveryLogService)
 
 local EvolutionService = {}
 
@@ -38,9 +39,19 @@ local function pickElementalOutcome(influences)
 end
 
 -- Call after any action that adds Growth Points. No-ops unless the
--- Critter just crossed the threshold and hasn't already evolved.
+-- Critter just crossed the threshold, hasn't already evolved, and its own
+-- species definition actually lists possible evolutions -- e.g. a second
+-- Critter granted directly as "mossy" (see MilestoneService) is already a
+-- final form and should just mature, not re-roll into "blazebit" because
+-- its Fire Influence happened to climb. Only definitions with an
+-- EvolvesInto list (currently just "pip") are eligible at all.
 function EvolutionService.CheckAndEvolve(player, profile, record)
 	if record.EvolvedInto or not GrowthService.IsReadyToEvolve(record) then
+		return
+	end
+
+	local currentDefinition = CritterDefinitions.Get(record.DefinitionId)
+	if not currentDefinition or not currentDefinition.EvolvesInto then
 		return
 	end
 
@@ -54,13 +65,34 @@ function EvolutionService.CheckAndEvolve(player, profile, record)
 	local definition = CritterDefinitions.Get(outcomeId)
 	assert(definition, "EvolutionService: unknown outcome " .. tostring(outcomeId))
 
+	-- Snapshot what's about to be overwritten. Nothing consumes this yet --
+	-- it's the foundation an evolution reroll/"second chance" system would
+	-- need (see the monetization spec Phase 5), captured now so that data
+	-- isn't lost by the time such a system exists. Building the actual
+	-- reroll flow (an item, a remote, a UI) with no reroll mechanic to
+	-- attach it to would just be unfinished surface area.
+	table.insert(record.EvolutionHistory, {
+		Timestamp = os.time(),
+		FromDefinitionId = record.DefinitionId,
+		ToDefinitionId = outcomeId,
+		GrowthPoints = record.GrowthPoints,
+		Influences = {
+			Fire = record.Influences.Fire,
+			Water = record.Influences.Water,
+			Nature = record.Influences.Nature,
+			Shadow = record.Influences.Shadow,
+		},
+	})
+
 	record.DefinitionId = outcomeId
 	record.EvolvedInto = outcomeId
 	record.Stage = "Evolved"
 	record.Name = definition.Name
+	DiscoveryLogService.MarkDiscovered(profile, outcomeId)
 
 	local plot = HabitatManager.GetHabitatForOwner(player.UserId)
 	if plot then
+		CritterService.PlayEvolutionEffect(plot, definition.AccessoryColor)
 		CritterService.RefreshVisual(plot, profile)
 	end
 

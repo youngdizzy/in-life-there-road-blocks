@@ -40,14 +40,14 @@ function PipStatusUI.Init(playerGui)
 
 	local panel = Instance.new("Frame")
 	panel.Position = UDim2.fromOffset(16, 16)
-	panel.Size = UDim2.fromOffset(300, 190)
+	panel.Size = UDim2.fromOffset(300, 240)
 	panel.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 	panel.BackgroundTransparency = 0.1
 	panel.Parent = screenGui
 	corner(panel, 12)
 
 	local nameLabel = Instance.new("TextLabel")
-	nameLabel.Size = UDim2.new(1, -20, 0, 28)
+	nameLabel.Size = UDim2.new(0.6, -20, 0, 28)
 	nameLabel.Position = UDim2.fromOffset(10, 8)
 	nameLabel.BackgroundTransparency = 1
 	nameLabel.Text = "Pip"
@@ -56,6 +56,17 @@ function PipStatusUI.Init(playerGui)
 	nameLabel.TextScaled = true
 	nameLabel.TextXAlignment = Enum.TextXAlignment.Left
 	nameLabel.Parent = panel
+
+	local gemsLabel = Instance.new("TextLabel")
+	gemsLabel.Size = UDim2.new(0.4, -20, 0, 28)
+	gemsLabel.Position = UDim2.new(0.6, 0, 0, 8)
+	gemsLabel.BackgroundTransparency = 1
+	gemsLabel.Text = "0 💎"
+	gemsLabel.TextColor3 = Color3.fromRGB(180, 150, 255)
+	gemsLabel.Font = Enum.Font.GothamBold
+	gemsLabel.TextScaled = true
+	gemsLabel.TextXAlignment = Enum.TextXAlignment.Right
+	gemsLabel.Parent = panel
 
 	local stageLabel = Instance.new("TextLabel")
 	stageLabel.Size = UDim2.new(1, -20, 0, 20)
@@ -115,14 +126,44 @@ function PipStatusUI.Init(playerGui)
 	hintLabel.TextXAlignment = Enum.TextXAlignment.Left
 	hintLabel.Parent = panel
 
+	local boostsLabel = Instance.new("TextLabel")
+	boostsLabel.Size = UDim2.new(1, -20, 0, 16)
+	boostsLabel.Position = UDim2.fromOffset(10, 190)
+	boostsLabel.BackgroundTransparency = 1
+	boostsLabel.Text = ""
+	boostsLabel.TextColor3 = Color3.fromRGB(140, 220, 255)
+	boostsLabel.Font = Enum.Font.GothamBold
+	boostsLabel.TextScaled = true
+	boostsLabel.TextXAlignment = Enum.TextXAlignment.Left
+	boostsLabel.Parent = panel
+
+	local BOOST_LABELS = { GrowthBoost = "⚡ Growth Boost", LuckPotion = "🍀 Luck Potion" }
+
+	local function formatRemaining(seconds)
+		local minutes = math.floor(seconds / 60)
+		local secs = seconds % 60
+		return ("%d:%02d"):format(minutes, secs)
+	end
+
 	Remotes.get("StateUpdate").OnClientEvent:Connect(function(state)
 		nameLabel.Text = state.Name
-		stageLabel.Text = state.Evolved and "Evolved!" or state.Stage
+		gemsLabel.Text = ("%d 💎"):format(state.Gems or 0)
+		local stageText = state.Evolved and "Evolved!" or state.Stage
+		if state.Mood then
+			stageText = ("%s   %s %s"):format(stageText, state.Mood.Emoji, state.Mood.Label)
+		end
+		stageLabel.Text = stageText
 		growthLabel.Text = state.Evolved and "Fully grown"
 			or ("Growth: %d / %d"):format(state.GrowthPoints, state.GrowthThreshold)
 		hungerFill.Size = UDim2.fromScale(math.clamp(state.Hunger / 100, 0, 1), 1)
 		happinessFill.Size = UDim2.fromScale(math.clamp(state.Happiness / 100, 0, 1), 1)
 		hintLabel.Text = state.Evolved and state.Description or (state.DominantHint or "Pip's feelings are still a mystery...")
+
+		local parts = {}
+		for boostType, remaining in pairs(state.ActiveBoosts or {}) do
+			table.insert(parts, ("%s %s"):format(BOOST_LABELS[boostType] or boostType, formatRemaining(remaining)))
+		end
+		boostsLabel.Text = table.concat(parts, "   ")
 	end)
 end
 

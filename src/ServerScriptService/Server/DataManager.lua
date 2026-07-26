@@ -13,6 +13,15 @@ local profiles = {}
 
 local MAX_RETRIES = 3
 local RETRY_DELAY = 1.5
+local MAX_PROCESSED_RECEIPTS = 200
+
+-- Bump this whenever DefaultProfile/DefaultCritterRecord gains or changes a
+-- field in a way that needs more than the additive backfill fillDefaults
+-- already does. Right now every change so far has been additive (a new
+-- field with a safe default), so there's no real migration step yet --
+-- this exists so the day a field needs an actual transformation, there's
+-- already a version number on every saved profile to branch on.
+DataManager.SCHEMA_VERSION = 3
 
 local function attempt(fn)
 	local lastErr
@@ -40,7 +49,10 @@ function DataManager.DefaultCritterRecord(definitionId, name)
 		Hunger = 100,
 		Happiness = 100,
 		MysteryMushroomFeeds = 0,
+		VoidCandyUses = 0, -- see MutationLabService's "unstable mutation" hint
 		EvolvedInto = nil,
+		EquippedCosmetic = nil, -- cosmeticId from CosmeticConfig, or nil
+		EvolutionHistory = {}, -- snapshots captured right before each evolution (see EvolutionService); also read by MutationLabService for "previously discovered" hints
 		LastFeedAt = 0,
 		LastPlayAt = 0,
 	}
@@ -48,11 +60,25 @@ end
 
 function DataManager.DefaultProfile()
 	return {
+		SchemaVersion = DataManager.SCHEMA_VERSION,
 		Critters = {}, -- [uid] = critter record, see DefaultCritterRecord
 		ActiveCritterUid = nil,
-		Inventory = {}, -- reserved for future item types; unused in v1 (food is free)
+		SecondCritterGranted = false, -- see MilestoneService
+		Inventory = {}, -- [itemId] = quantity, see InventoryService
 		HabitatIndex = nil,
 		NextCritterUid = 1,
+
+		Gems = 0,
+		Discoveries = 0, -- count of Rare Discoveries found so far, see DiscoveryService
+		OwnedGamepasses = {}, -- [gamepassKey] = true, cached from UserOwnsGamePassAsync
+		UnlockedCosmetics = {}, -- [cosmeticId] = true, account-wide unlocks
+		ActiveBoosts = {}, -- [boostType] = { ExpiresAt = number }, see BoostService
+		ProcessedReceipts = {}, -- purchaseIds already granted, see MonetizationService.ProcessReceipt
+		EventProgress = {}, -- [eventId] = { RewardClaimed = bool }, see EventService
+		SelectedHabitatTheme = "default", -- see HabitatThemeService
+		DiscoveredSpecies = {}, -- [definitionId] = true, see DiscoveryLogService. Distinct from
+		-- `Discoveries` above (the Rare Discovery item-find counter) -- unfortunate near-miss in
+		-- naming history, kept because renaming Discoveries now would just churn every save file.
 	}
 end
 
@@ -94,6 +120,7 @@ function DataManager.LoadProfile(player)
 		end
 		profile = DataManager.DefaultProfile()
 	end
+	profile.SchemaVersion = DataManager.SCHEMA_VERSION
 
 	profiles[player.UserId] = profile
 	return profile
@@ -128,6 +155,25 @@ function DataManager.NewCritterUid(profile)
 	local uid = tostring(profile.NextCritterUid)
 	profile.NextCritterUid += 1
 	return uid
+end
+
+-- Records a MarketplaceService purchase id so ProcessReceipt can be safely
+-- retried by Roblox (it *will* retry) without ever granting a product
+-- twice. A bounded ring buffer, not an ever-growing list.
+function DataManager.HasProcessedReceipt(profile, purchaseId)
+	for _, id in ipairs(profile.ProcessedReceipts) do
+		if id == purchaseId then
+			return true
+		end
+	end
+	return false
+end
+
+function DataManager.MarkReceiptProcessed(profile, purchaseId)
+	table.insert(profile.ProcessedReceipts, purchaseId)
+	while #profile.ProcessedReceipts > MAX_PROCESSED_RECEIPTS do
+		table.remove(profile.ProcessedReceipts, 1)
+	end
 end
 
 function DataManager.AutosaveAll()

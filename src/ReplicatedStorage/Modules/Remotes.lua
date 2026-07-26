@@ -1,6 +1,7 @@
--- Thin accessor over the RemoteEvent instances defined in default.project.json
--- under ReplicatedStorage.Remotes, so both client and server code can do
--- `Remotes.get("CollectCash"):FireServer()` without repeating WaitForChild calls.
+-- Thin accessor over the RemoteEvent/RemoteFunction instances defined in
+-- default.project.json under ReplicatedStorage.Remotes, so both client and
+-- server code can do `Remotes.get("FeedCritter"):FireServer(foodId)`
+-- without repeating WaitForChild calls.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 

@@ -43,4 +43,18 @@ function GrowthConfig.GetStage(growthPoints)
 	return current.Name
 end
 
+function GrowthConfig.GetStageThreshold(stageName)
+	for _, stage in ipairs(GrowthConfig.Stages) do
+		if stage.Name == stageName then
+			return stage.MinPoints
+		end
+	end
+	return nil
+end
+
+-- The first meaningful Pip growth milestone (see MilestoneService): reads
+-- the "Ready to Evolve" stage's own threshold rather than duplicating the
+-- number, so the two can never quietly drift apart.
+GrowthConfig.SecondCritterMilestoneStage = "Ready to Evolve"
+
 return GrowthConfig
