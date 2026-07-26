@@ -1,5 +1,5 @@
--- Assigns/releases habitats to players and teleports them home. Depends on
--- HabitatBuilder having already run so `plots` is populated.
+-- Assigns/releases habitats to players. Depends on HabitatBuilder having
+-- already run so `plots` is populated.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HabitatConfig = require(ReplicatedStorage.Config.HabitatConfig)
@@ -117,21 +117,14 @@ function HabitatManager.ClearVIPVisual(plot)
 	end
 end
 
-local function teleportToHabitat(player, plot)
-	local character = player.Character
-	if not character then
-		return
-	end
-	local root = character:FindFirstChild("HumanoidRootPart")
-	if not root then
-		return
-	end
-	root.CFrame = plot.CFrame * CFrame.new(0, 5, 12)
-end
-
 -- Reassigns a previously-saved habitat if one is still free at that index,
 -- otherwise hands out any free habitat. Keeping the same index across
 -- sessions is a nice-to-have (same spot every time), not a guarantee.
+--
+-- Deliberately does NOT teleport the player here. Every player spawns in
+-- the Meadow (see WorldBuilder's SpawnLocation) and walks the south path to
+-- the neighborhood themselves -- "discover their habitat" is part of the
+-- map's intended first-session flow, not a step to skip with a teleport.
 function HabitatManager.AssignHabitat(player, preferredIndex)
 	local index = nil
 	if preferredIndex then
@@ -156,19 +149,6 @@ function HabitatManager.AssignHabitat(player, preferredIndex)
 	ownerToIndex[player.UserId] = index
 	updateSign(plot, player.Name .. "'s Habitat")
 
-	if player.Character then
-		teleportToHabitat(player, plot)
-	end
-	local conn
-	conn = player.CharacterAdded:Connect(function(character)
-		local root = character:WaitForChild("HumanoidRootPart")
-		task.wait(0.1)
-		if ownerToIndex[player.UserId] == index then
-			root.CFrame = plot.CFrame * CFrame.new(0, 5, 12)
-		end
-	end)
-	plot.CharacterAddedConn = conn
-
 	return plot
 end
 
@@ -179,11 +159,6 @@ function HabitatManager.ReleaseHabitat(player, onClear)
 	end
 
 	local plot = plots[index]
-	if plot.CharacterAddedConn then
-		plot.CharacterAddedConn:Disconnect()
-		plot.CharacterAddedConn = nil
-	end
-
 	if onClear then
 		onClear(plot)
 	end

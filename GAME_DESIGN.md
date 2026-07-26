@@ -206,11 +206,64 @@ modeled/animated assets later is a matter of replacing the model-builder
 functions — the data (which Critter, which stage, which evolution) doesn't
 change.
 
+## The World Map
+
+The overworld is a hub with themed destinations branching off it, built
+procedurally by two modules: `WorldBuilder` (everything shared) and
+`HabitatBuilder` (the player-habitat neighborhood). Every prop is a plain
+Roblox Part built at runtime — same rule as "Placeholder Art Policy" above,
+zero imported meshes, zero external asset/texture Ids.
+
+- **The Meadow** — the central hub and spawn point. Home to **the Critter
+  Tree** (a large stylized landmark with a `ProximityPrompt` that's a real
+  hook for future Discoveries/Evolution/Events/lore, not just decoration
+  yet), a meeting-ring of benches, and a compass sign listing every
+  destination so a new player is never lost.
+- **The Critter Archive** — a small museum/lab building next to the Tree.
+  Physically points at the Bestiary concept (two "undiscovered silhouette"
+  pedestals out front) but doesn't duplicate `DiscoveryLogService`'s data —
+  its `ProximityPrompt` just nudges the player toward the real Collection/
+  Discovery Log panel.
+- **The Critter Plaza** — an open social area (fountain, benches, empty
+  display plinths) next to the Tree. Purely a physical space for now; SHOW
+  OFF/TRADE are still real future systems, not built here (see "Explicitly
+  Not Built Yet").
+- **The four public Environment Zones** — Verdant Wilds (**The Giant
+  Bloom**), Ember Zone (**The Ember Core**), Tidepool (**The Great Pool**),
+  Gloom Grove (**The Whispering Hollow**). These replaced the old
+  per-habitat zone pads: same `zoneId`s (`nature_patch`/`fire_corner`/
+  `water_pool`/`shadow_nook`), same `EnvironmentConfig` data, same
+  `InfluenceService.HandlePlayAtZone` call — moving them into the shared
+  world required no changes to the influence/growth/evolution chain at
+  all, since that chain was already zone-id-driven, never location-driven.
+  Unlike the old habitat copies, these have no owner check: any player can
+  play here with their own active Critter.
+- **The Evolution Sanctum** — a circular dais with four Influence-colored
+  braziers and a central spire. Visually important, deliberately simple
+  for the MVP — a landmark, not a new mechanic.
+- **Player Habitats** — a neighborhood south of the Meadow
+  (`HabitatBuilder`), connected by a walking path. Each plot keeps its
+  pedestal, perimeter fence, and owner sign; the four Environment Zones
+  moved out to the shared world above, so a habitat's job is now just "a
+  home and a display for your Critter."
+
+A new player spawns in the Meadow (a real `SpawnLocation`, not a scripted
+teleport) and walks everywhere themselves — including to their own
+habitat — which is the intended first-session flow (see "Map Flow" in the
+delivery report for this phase).
+
+Adding a future zone (Electric Stormlands, Cloud Kingdom, Crystal
+Caverns, etc.) means one new entry in `WorldConfig.Zones` plus one new
+landmark-builder function registered in `WorldBuilder`'s
+`ZONE_LANDMARK_BUILDERS` table — the hub-and-spoke path math, the ground
+patch, and the `ProximityPrompt` wiring are all generic and don't change.
+
 ## MVP Scope (v1 — what this repo currently implements)
 
 - Player joins, is granted a starter Pip if they don't have one yet.
-- Player is assigned a personal habitat plot with Pip's pedestal and four
-  Environment Zones (Fire / Water / Nature / Shadow).
+- Player is assigned a personal habitat plot with Pip's pedestal, and can
+  walk to any of the four shared public Environment Zones to influence it
+  (Fire / Water / Nature / Shadow — see "The World Map").
 - Player can **feed** Pip from a small, purposeful food menu.
 - Player can **play** with Pip at any Environment Zone.
 - Both actions move hidden Influence values and a visible Growth meter,
@@ -350,8 +403,6 @@ fun**:
   a large catalog of item *types* built on top of it yet)
 - Evolution reroll/second-chance (the snapshot data exists; nothing
   consumes it yet — see Phase 5b above)
-- A shared central hub with themed public destinations (see "Core Loop Fun
-  Audit" below — deliberately deprioritized this round)
 - A scripted first-session tutorial/onboarding sequence (see "Core Loop Fun
   Audit" below — deliberately deprioritized this round)
 
@@ -372,13 +423,6 @@ gaps found — and what was done about each:
 
 **Deliberately not built this round**, and why:
 
-- **A shared central hub with themed destinations** (the brief's "Meadow /
-  Ember Zone / Tidepool / Gloom Grove" idea). Each personal habitat
-  already has all four Environment Zones — a second, public copy of the
-  same mechanic adds world surface area without adding depth to the
-  actual raising loop, and the brief itself warns against "a massive open
-  world with nothing to do." This is a reasonable next step once the loop
-  above is confirmed fun in practice, not before.
 - **A scripted first-10-minutes tutorial.** A popup-driven onboarding
   sequence is exactly the kind of "system that isn't connected to
   gameplay" Development Principle #10 warns about. The fixes above (an
