@@ -51,11 +51,29 @@ function MutationLabService.GetAnalysis(player)
 		breakdown[influenceType] = qualitativeLabel(record.Influences[influenceType] or 0)
 	end
 
+	-- Names Critters this specific record has previously become (relevant
+	-- once a reroll/second-chance system uses EvolutionHistory) without
+	-- naming what it's about to become now.
+	local previouslySeen = {}
+	for _, snapshot in ipairs(record.EvolutionHistory) do
+		local definition = CritterDefinitions.Get(snapshot.ToDefinitionId)
+		if definition then
+			table.insert(previouslySeen, definition.Name)
+		end
+	end
+
+	local unstableHint = nil
+	if record.VoidCandyUses > 0 then
+		unstableHint = "This Critter is showing signs of an unstable mutation."
+	end
+
 	return {
 		Breakdown = breakdown,
 		DiscoveriesFound = profile.Discoveries,
 		GrowthPercent = math.floor((record.GrowthPoints / GrowthConfig.EvolveThreshold) * 100),
 		Evolved = record.EvolvedInto ~= nil,
+		PreviouslySeenEvolutions = previouslySeen,
+		UnstableHint = unstableHint,
 	}
 end
 

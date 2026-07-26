@@ -9,9 +9,11 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local MonetizationConfig = require(ReplicatedStorage.Config.MonetizationConfig)
+local MutationItemConfig = require(ReplicatedStorage.Config.MutationItemConfig)
 local Remotes = require(ReplicatedStorage.Modules.Remotes)
 local LuckService = require(script.Parent.LuckService)
 local GrowthService = require(script.Parent.GrowthService)
+local InventoryService = require(script.Parent.InventoryService)
 
 local DiscoveryService = {}
 
@@ -34,10 +36,18 @@ function DiscoveryService.RollForDiscovery(player, profile, record)
 		GrowthService.AddGrowthPoints(profile, record, MonetizationConfig.Discovery.BonusGrowthPoints)
 	end
 
-	Remotes.get("Notify"):FireClient(player, {
-		Text = ("✨ Rare discovery! %s found something special."):format(record.Name),
-		Kind = "success",
-	})
+	local message = ("✨ Rare discovery! %s found something special."):format(record.Name)
+
+	-- This is the actual acquisition path for Mutation Items in v1 -- see
+	-- MonetizationConfig.Discovery.GrantsMutationItem and MutationItemConfig.
+	if MonetizationConfig.Discovery.GrantsMutationItem and #MutationItemConfig.ImplementedIds > 0 then
+		local itemId = MutationItemConfig.ImplementedIds[math.random(1, #MutationItemConfig.ImplementedIds)]
+		InventoryService.AddItem(profile, itemId, 1)
+		local item = MutationItemConfig.Get(itemId)
+		message = ("✨ Rare discovery! %s found a %s."):format(record.Name, item.Name)
+	end
+
+	Remotes.get("Notify"):FireClient(player, { Text = message, Kind = "success" })
 
 	return true
 end

@@ -9,6 +9,7 @@ local FoodConfig = require(ReplicatedStorage.Config.FoodConfig)
 local EnvironmentConfig = require(ReplicatedStorage.Config.EnvironmentConfig)
 local GrowthConfig = require(ReplicatedStorage.Config.GrowthConfig)
 local MonetizationConfig = require(ReplicatedStorage.Config.MonetizationConfig)
+local CritterDefinitions = require(ReplicatedStorage.Config.CritterDefinitions)
 local Remotes = require(ReplicatedStorage.Modules.Remotes)
 
 local DataManager = require(script.Parent.DataManager)
@@ -17,6 +18,8 @@ local GrowthService = require(script.Parent.GrowthService)
 local EvolutionService = require(script.Parent.EvolutionService)
 local StateService = require(script.Parent.StateService)
 local DiscoveryService = require(script.Parent.DiscoveryService)
+local MilestoneService = require(script.Parent.MilestoneService)
+local EventService = require(script.Parent.EventService)
 
 local InfluenceService = {}
 
@@ -28,11 +31,22 @@ local function applyInfluences(record, effects)
 	for influenceType, delta in pairs(effects) do
 		record.Influences[influenceType] = (record.Influences[influenceType] or 0) + delta
 	end
+
+	-- Active event bonuses (e.g. First Eclipse's faint extra Shadow pull)
+	-- apply on top of every Feed/Play action, not just specific foods/zones.
+	-- See EventService.GetInfluenceBonus -- returns 0 when nothing's active.
+	for _, influenceType in ipairs(CritterDefinitions.InfluenceTypes) do
+		local bonus = EventService.GetInfluenceBonus(influenceType)
+		if bonus > 0 then
+			record.Influences[influenceType] += bonus
+		end
+	end
 end
 
 local function afterAction(player, profile, record)
 	if not record.EvolvedInto then
 		DiscoveryService.RollForDiscovery(player, profile, record)
+		MilestoneService.CheckFirstMilestone(player, profile, record)
 		EvolutionService.CheckAndEvolve(player, profile, record)
 	end
 	StateService.Push(player, profile)

@@ -221,6 +221,9 @@ change.
 - At the Growth threshold, Pip evolves into Blazebit / Mossy / Nox /
   Ripple / the Secret outcome based on accumulated Influence, with a
   rewarding reveal moment, and its habitat model updates permanently.
+- The first time Pip reaches "Ready to Evolve," the player is granted a
+  second Critter (a first, deliberately small taste of COLLECT) and can
+  switch which Critter is active from the Collection panel.
 - All of the above persists through DataStore save/load, including quick
   leave/rejoin.
 
@@ -262,24 +265,30 @@ Concretely, that means:
 ## Monetization Phase Status
 
 Built in the order the monetization spec asked for, so each phase lands on
-a working foundation rather than everything half-built at once:
+a working foundation rather than everything half-built at once. See
+`README.md` → "System status" for the full FUNCTIONAL/PARTIALLY
+FUNCTIONAL/SCHEMA ONLY/PLACEHOLDER breakdown of every individual system;
+this table is the phase-level summary.
 
 | Phase | Contents | Status |
 |---|---|---|
-| 1 | `MonetizationConfig`, gamepass ownership checking, 2x Luck, Growth Boost, `DiscoveryService` (first real luck-gated hook) | ✅ Implemented |
-| 2 | Extra Critter Slots (`CritterSlotService`), VIP Habitat visual (`HabitatManager.ApplyVIPVisual`), Cosmetic effect system (`CosmeticService`, 2 real effects + 4 stubs) | ✅ Implemented |
-| 3 | Auto-Care (`InfluenceService.StartAutoCareLoop`), Mutation Lab (`MutationLabService`) | ✅ Implemented |
-| 4 | `ProcessReceipt`, gem packs, temporary Growth/Luck boosts (`BoostService`) | ✅ Implemented |
-| 5 | Mystery Mutation Items, evolution reroll/second-chance | 🚧 Data-only stub (`MutationItemConfig`) + a snapshot hook (`EvolutionService.EvolutionHistory`) captured for later — no inventory system exists yet for items to plug into, so the grant/consume/effect flow isn't built |
-| 6 | Limited-time event framework | 🚧 Schema-only stub (`EventConfig`, four example events, all `Active = false`) — no `EventService` runs any of it yet |
-| 7 | Habitat monetization (premium themes) | 🚧 Schema-only stub (`HabitatThemeConfig`) — VIP Habitat's corner-post/badge visual is the only real habitat monetization shipped so far |
+| 1 | `MonetizationConfig`, gamepass ownership checking, 2x Luck, Growth Boost, `DiscoveryService` (first real luck-gated hook) | ✅ Functional |
+| 2 | Extra Critter Slots (`CritterSlotService`), second-Critter acquisition (`MilestoneService`), Critter Collection (`CollectionService`), VIP Habitat visual, Cosmetic effect system (`CosmeticService`, 2 real effects + 4 stubs) | ✅ Functional |
+| 3 | Auto-Care (`InfluenceService.StartAutoCareLoop`), Mutation Lab (`MutationLabService`) | ✅ Functional |
+| 4 | `ProcessReceipt`, gem packs, temporary Growth/Luck boosts (`BoostService`) | ✅ Functional |
+| 5 | Mystery Mutation Items (`InventoryService`, `MutationItemService`) | ✅ Functional — acquired via Rare Discoveries, consumed on a Critter, nudge real Influence |
+| 5b | Evolution reroll/second-chance | 🚧 Still just the snapshot hook (`EvolutionService.EvolutionHistory`); now also feeds the Mutation Lab's "previously seen" hint, but nothing consumes it for an actual reroll |
+| 6 | Limited-time event framework | ✅ Functional for one real event ("First Eclipse" / `eclipse`, manually toggled `Active = true`, real Shadow Influence bonus + claimable reward); the other three (`meteor`/`garden_festival`/`chaos_weekend`) remain schema-only stubs |
+| 7 | Habitat monetization (theme selection) | ✅ Functional for two real themes (`default`, `vip` — ownership-gated, selectable, persists); the six premium re-skin themes remain schema-only stubs with no render path |
 
-Practical limitation worth knowing: **Extra Critter Slots has no visible
-effect yet.** The gate (`CritterSlotService`) is real and enforced, but v1
-has no way to *acquire* a second Critter at all (no gacha, no event
-drops) — so raising the cap currently can't be exercised. It becomes real
-the moment any future system grants a Critter through
-`CritterSlotService.AddCritter`.
+**Extra Critter Slots is now partially meaningful**: the base slot count is
+2 (room for Pip + the milestone-granted second Critter), and the gamepass's
+extra 3 slots are a real, enforced increase — but v1 still has no way to
+*fill* those extra slots (Rare Discoveries grant Mutation Items, not
+Critters). The gate (`CritterSlotService.AddCritter`) is the single
+sanctioned path any future acquisition system (a real egg/gacha system, more
+milestones, event Critters) would use, so extending this further doesn't
+require touching the gate itself.
 
 ## Explicitly Not Built Yet
 
@@ -288,7 +297,7 @@ real future pillars but are **out of scope until the above loop is proven
 fun**:
 
 - Trading between players
-- Large multiplayer live events (framework schema exists, see Phase 6 above; not running)
+- Multiple concurrent/scheduled live events (one real event runs; see Phase 6 above)
 - Multiple currencies
 - A large open world
 - Combat
@@ -296,8 +305,11 @@ fun**:
 - Battle passes
 - A large quest system
 - Complex crafting
-- A large inventory/item system beyond the small starter food menu (this
-  is also why Mystery Mutation Items aren't built yet — see Phase 5 above)
+- A large inventory/item system beyond the 5 Mutation Items (the inventory
+  itself is generic and real -- see `InventoryService` -- there's just not
+  a large catalog of item *types* built on top of it yet)
+- Evolution reroll/second-chance (the snapshot data exists; nothing
+  consumes it yet — see Phase 5b above)
 
 ## Development Principles
 

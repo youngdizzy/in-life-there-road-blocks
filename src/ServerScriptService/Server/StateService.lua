@@ -12,6 +12,9 @@ local CritterService = require(script.Parent.CritterService)
 local GrowthService = require(script.Parent.GrowthService)
 local CritterSlotService = require(script.Parent.CritterSlotService)
 local BoostService = require(script.Parent.BoostService)
+local CollectionService = require(script.Parent.CollectionService)
+local EventService = require(script.Parent.EventService)
+local HabitatThemeService = require(script.Parent.HabitatThemeService)
 
 local StateService = {}
 
@@ -33,6 +36,16 @@ function StateService.Push(player, profile)
 		end
 	end
 
+	local activeEvents = {}
+	for _, event in ipairs(EventService.GetActiveEvents()) do
+		table.insert(activeEvents, {
+			Id = event.Id,
+			Name = event.Name,
+			Description = event.Description,
+			Claimed = EventService.HasClaimedReward(profile, event.Id),
+		})
+	end
+
 	Remotes.get("StateUpdate"):FireClient(player, {
 		Name = record.Name,
 		Description = definition and definition.Description or "",
@@ -52,6 +65,12 @@ function StateService.Push(player, profile)
 		CritterSlotsUsed = CritterSlotService.GetUsedSlots(profile),
 		CritterSlotsMax = CritterSlotService.GetMaxSlots(profile),
 		ActiveBoosts = activeBoosts,
+
+		Collection = CollectionService.GetSummary(profile),
+		Inventory = profile.Inventory,
+		ActiveEvents = activeEvents,
+		AvailableHabitatThemes = HabitatThemeService.GetAvailableThemes(profile),
+		SelectedHabitatTheme = profile.SelectedHabitatTheme,
 	})
 end
 

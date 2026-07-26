@@ -8,6 +8,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local MonetizationConfig = require(ReplicatedStorage.Config.MonetizationConfig)
 local CosmeticConfig = require(ReplicatedStorage.Config.CosmeticConfig)
+local HabitatThemeConfig = require(ReplicatedStorage.Config.HabitatThemeConfig)
 local Remotes = require(ReplicatedStorage.Modules.Remotes)
 
 local ShopUI = {}
@@ -172,7 +173,7 @@ local function renderCurrency(list)
 	end
 end
 
-local function renderComingSoon(list, text)
+local function renderEmptyNote(list, text)
 	clearChildren(list)
 	local label = Instance.new("TextLabel")
 	label.Size = UDim2.new(1, 0, 0, 60)
@@ -182,6 +183,76 @@ local function renderComingSoon(list, text)
 	label.Font = Enum.Font.GothamItalic
 	label.TextScaled = true
 	label.Parent = list
+end
+
+local function renderHabitat(list)
+	clearChildren(list)
+	local order = 0
+	local available = {}
+	if latestState and latestState.AvailableHabitatThemes then
+		for _, theme in ipairs(latestState.AvailableHabitatThemes) do
+			available[theme.Id] = true
+		end
+	end
+
+	for id, cfg in pairs(HabitatThemeConfig.Themes) do
+		if cfg.Implemented then
+			order += 1
+			local owned = available[id]
+			local selected = latestState and latestState.SelectedHabitatTheme == id
+
+			if owned then
+				buildRow(
+					list,
+					order,
+					cfg.Name,
+					selected and "Currently selected." or "Tap to display this theme on your habitat.",
+					selected and "Selected" or "Select",
+					selected and Color3.fromRGB(80, 80, 90) or Color3.fromRGB(90, 160, 230),
+					(not selected) and function()
+						Remotes.get("SelectHabitatTheme"):FireServer(id)
+					end or nil
+				)
+			else
+				buildRow(
+					list,
+					order,
+					cfg.Name,
+					("Requires the %s gamepass."):format(
+						cfg.RequiresGamepass and MonetizationConfig.Gamepasses[cfg.RequiresGamepass].Name or "?"
+					),
+					"Get it",
+					Color3.fromRGB(230, 170, 60),
+					cfg.RequiresGamepass and function()
+						Remotes.get("PromptGamepass"):FireServer(cfg.RequiresGamepass)
+					end or nil
+				)
+			end
+		end
+	end
+end
+
+local function renderEvent(list)
+	local events = latestState and latestState.ActiveEvents or {}
+	if #events == 0 then
+		renderEmptyNote(list, "No event is running right now.")
+		return
+	end
+
+	clearChildren(list)
+	for order, event in ipairs(events) do
+		buildRow(
+			list,
+			order,
+			event.Name,
+			event.Description,
+			event.Claimed and "Claimed" or "Claim Reward",
+			event.Claimed and Color3.fromRGB(80, 80, 90) or Color3.fromRGB(80, 180, 100),
+			(not event.Claimed) and function()
+				Remotes.get("ClaimEventReward"):FireServer(event.Id)
+			end or nil
+		)
+	end
 end
 
 function ShopUI.Init(playerGui)
@@ -267,8 +338,8 @@ function ShopUI.Init(playerGui)
 		{ Name = "Boosts", Render = renderBoosts },
 		{ Name = "Cosmetics", Render = renderCosmetics },
 		{ Name = "Currency", Render = renderCurrency },
-		{ Name = "Habitat", Render = function(l) renderComingSoon(l, "Premium habitat themes are coming soon.") end },
-		{ Name = "Event", Render = function(l) renderComingSoon(l, "No event is running right now.") end },
+		{ Name = "Habitat", Render = renderHabitat },
+		{ Name = "Event", Render = renderEvent },
 	}
 
 	local tabButtons = {}

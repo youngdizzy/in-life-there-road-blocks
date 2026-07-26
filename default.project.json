@@ -16,7 +16,11 @@
         "PromptGamepass": { "$className": "RemoteEvent" },
         "PromptDevProduct": { "$className": "RemoteEvent" },
         "EquipCosmetic": { "$className": "RemoteEvent" },
-        "GetMutationAnalysis": { "$className": "RemoteFunction" }
+        "GetMutationAnalysis": { "$className": "RemoteFunction" },
+        "SetActiveCritter": { "$className": "RemoteEvent" },
+        "UseMutationItem": { "$className": "RemoteEvent" },
+        "ClaimEventReward": { "$className": "RemoteEvent" },
+        "SelectHabitatTheme": { "$className": "RemoteEvent" }
       }
     },
 

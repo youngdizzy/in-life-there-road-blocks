@@ -39,7 +39,7 @@ function MutationLabUI.Init(playerGui)
 	local panel = Instance.new("Frame")
 	panel.AnchorPoint = Vector2.new(1, 0)
 	panel.Position = UDim2.new(1, -20, 0, 76)
-	panel.Size = UDim2.fromOffset(280, 220)
+	panel.Size = UDim2.fromOffset(280, 280)
 	panel.BackgroundColor3 = Color3.fromRGB(32, 32, 38)
 	panel.Visible = false
 	panel.Parent = screenGui
@@ -83,6 +83,30 @@ function MutationLabUI.Init(playerGui)
 	footer.TextXAlignment = Enum.TextXAlignment.Left
 	footer.Parent = panel
 
+	local unstableLabel = Instance.new("TextLabel")
+	unstableLabel.Size = UDim2.new(1, -20, 0, 30)
+	unstableLabel.Position = UDim2.fromOffset(10, 195)
+	unstableLabel.BackgroundTransparency = 1
+	unstableLabel.Text = ""
+	unstableLabel.TextColor3 = Color3.fromRGB(200, 130, 230)
+	unstableLabel.TextWrapped = true
+	unstableLabel.Font = Enum.Font.GothamBold
+	unstableLabel.TextScaled = true
+	unstableLabel.TextXAlignment = Enum.TextXAlignment.Left
+	unstableLabel.Parent = panel
+
+	local historyLabel = Instance.new("TextLabel")
+	historyLabel.Size = UDim2.new(1, -20, 0, 40)
+	historyLabel.Position = UDim2.fromOffset(10, 230)
+	historyLabel.BackgroundTransparency = 1
+	historyLabel.Text = ""
+	historyLabel.TextColor3 = Color3.fromRGB(140, 220, 255)
+	historyLabel.TextWrapped = true
+	historyLabel.Font = Enum.Font.Gotham
+	historyLabel.TextScaled = true
+	historyLabel.TextXAlignment = Enum.TextXAlignment.Left
+	historyLabel.Parent = panel
+
 	local function refresh()
 		local analysis, reason = Remotes.get("GetMutationAnalysis"):InvokeServer()
 
@@ -103,6 +127,13 @@ function MutationLabUI.Init(playerGui)
 				analysis.GrowthPercent,
 				analysis.DiscoveriesFound
 			)
+		unstableLabel.Text = analysis.UnstableHint or ""
+
+		if analysis.PreviouslySeenEvolutions and #analysis.PreviouslySeenEvolutions > 0 then
+			historyLabel.Text = "Previously seen: " .. table.concat(analysis.PreviouslySeenEvolutions, ", ")
+		else
+			historyLabel.Text = "No evolutions witnessed yet."
+		end
 	end
 
 	button.MouseButton1Click:Connect(function()

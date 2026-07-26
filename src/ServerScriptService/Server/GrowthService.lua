@@ -6,6 +6,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local GrowthConfig = require(ReplicatedStorage.Config.GrowthConfig)
 local MonetizationConfig = require(ReplicatedStorage.Config.MonetizationConfig)
+local CritterDefinitions = require(ReplicatedStorage.Config.CritterDefinitions)
 local BoostService = require(script.Parent.BoostService)
 
 local GrowthService = {}
@@ -39,7 +40,16 @@ end
 -- so no caller ever has to remember to multiply it in themselves.
 function GrowthService.AddGrowthPoints(profile, record, basePoints)
 	record.GrowthPoints += basePoints * GrowthService.GetGrowthMultiplier(profile)
-	record.Stage = GrowthConfig.GetStage(record.GrowthPoints)
+
+	local definition = CritterDefinitions.Get(record.DefinitionId)
+	if not definition.EvolvesInto and record.GrowthPoints >= GrowthConfig.EvolveThreshold then
+		-- A species with nowhere left to evolve (e.g. a second Critter
+		-- granted directly as "mossy") just matures instead of sitting at
+		-- "Ready to Evolve" forever with nothing to evolve into.
+		record.Stage = "Mature"
+	else
+		record.Stage = GrowthConfig.GetStage(record.GrowthPoints)
+	end
 end
 
 function GrowthService.IsReadyToEvolve(record)

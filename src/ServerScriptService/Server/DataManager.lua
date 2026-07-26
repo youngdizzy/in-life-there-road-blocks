@@ -21,7 +21,7 @@ local MAX_PROCESSED_RECEIPTS = 200
 -- field with a safe default), so there's no real migration step yet --
 -- this exists so the day a field needs an actual transformation, there's
 -- already a version number on every saved profile to branch on.
-DataManager.SCHEMA_VERSION = 2
+DataManager.SCHEMA_VERSION = 3
 
 local function attempt(fn)
 	local lastErr
@@ -49,9 +49,10 @@ function DataManager.DefaultCritterRecord(definitionId, name)
 		Hunger = 100,
 		Happiness = 100,
 		MysteryMushroomFeeds = 0,
+		VoidCandyUses = 0, -- see MutationLabService's "unstable mutation" hint
 		EvolvedInto = nil,
 		EquippedCosmetic = nil, -- cosmeticId from CosmeticConfig, or nil
-		EvolutionHistory = {}, -- snapshots captured right before each evolution (see EvolutionService); foundation for a future reroll/second-chance system
+		EvolutionHistory = {}, -- snapshots captured right before each evolution (see EvolutionService); also read by MutationLabService for "previously discovered" hints
 		LastFeedAt = 0,
 		LastPlayAt = 0,
 	}
@@ -62,7 +63,8 @@ function DataManager.DefaultProfile()
 		SchemaVersion = DataManager.SCHEMA_VERSION,
 		Critters = {}, -- [uid] = critter record, see DefaultCritterRecord
 		ActiveCritterUid = nil,
-		Inventory = {}, -- reserved for future item types; unused in v1 (food is free)
+		SecondCritterGranted = false, -- see MilestoneService
+		Inventory = {}, -- [itemId] = quantity, see InventoryService
 		HabitatIndex = nil,
 		NextCritterUid = 1,
 
@@ -72,6 +74,8 @@ function DataManager.DefaultProfile()
 		UnlockedCosmetics = {}, -- [cosmeticId] = true, account-wide unlocks
 		ActiveBoosts = {}, -- [boostType] = { ExpiresAt = number }, see BoostService
 		ProcessedReceipts = {}, -- purchaseIds already granted, see MonetizationService.ProcessReceipt
+		EventProgress = {}, -- [eventId] = { RewardClaimed = bool }, see EventService
+		SelectedHabitatTheme = "default", -- see HabitatThemeService
 	}
 end
 

@@ -13,7 +13,7 @@ local Remotes = require(ReplicatedStorage.Modules.Remotes)
 local DataManager = require(script.Parent.DataManager)
 local BoostService = require(script.Parent.BoostService)
 local CosmeticService = require(script.Parent.CosmeticService)
-local HabitatManager = require(script.Parent.HabitatManager)
+local HabitatThemeService = require(script.Parent.HabitatThemeService)
 local StateService = require(script.Parent.StateService)
 
 local MonetizationService = {}
@@ -22,12 +22,15 @@ local function notify(player, message, kind)
 	Remotes.get("Notify"):FireClient(player, { Text = message, Kind = kind or "info" })
 end
 
--- Side effects that should happen the instant a gamepass is confirmed
--- owned, whether that's on join (CheckOwnedGamepasses) or mid-session
--- (PromptGamePassPurchaseFinished). Idempotent -- safe to call every join.
-local function applyGamepassEffects(player, profile, key)
+-- Side effects for the moment a gamepass is *newly* confirmed owned
+-- (PromptGamePassPurchaseFinished only -- NOT the join-time ownership
+-- check, which must never force a player's chosen habitat theme back to
+-- VIP if they'd deliberately switched to Default). VIPHabitat auto-selects
+-- the VIP theme once, on purchase, as a nice immediate payoff; the player
+-- can switch back via HabitatThemeService any time after.
+local function applyGamepassPurchaseEffects(player, profile, key)
 	if key == "VIPHabitat" then
-		HabitatManager.ApplyVIPVisual(HabitatManager.GetHabitatForOwner(player.UserId))
+		HabitatThemeService.SelectTheme(player, profile, "vip")
 	end
 end
 
@@ -50,15 +53,6 @@ function MonetizationService.CheckOwnedGamepasses(player, profile)
 				))
 			end
 		end
-	end
-end
-
--- Applies gamepass side effects (VIP visuals, etc.) for whatever the player
--- already owns. Call after the habitat is assigned, since some effects
--- (VIPHabitat) need a habitat to exist first.
-function MonetizationService.ApplyOwnedGamepassEffects(player, profile)
-	for key in pairs(profile.OwnedGamepasses) do
-		applyGamepassEffects(player, profile, key)
 	end
 end
 
@@ -93,7 +87,7 @@ function MonetizationService.Init()
 		for key, cfg in pairs(MonetizationConfig.Gamepasses) do
 			if cfg.Id == gamePassId then
 				profile.OwnedGamepasses[key] = true
-				applyGamepassEffects(player, profile, key)
+				applyGamepassPurchaseEffects(player, profile, key)
 				StateService.Push(player, profile)
 				notify(player, ("Thanks for buying %s!"):format(cfg.Name), "success")
 				break

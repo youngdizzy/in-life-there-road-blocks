@@ -15,7 +15,11 @@ local InfluenceService = require(script.Parent.InfluenceService)
 local StateService = require(script.Parent.StateService)
 local MonetizationService = require(script.Parent.MonetizationService)
 local MutationLabService = require(script.Parent.MutationLabService)
+local MutationItemService = require(script.Parent.MutationItemService)
 local CosmeticService = require(script.Parent.CosmeticService)
+local CollectionService = require(script.Parent.CollectionService)
+local EventService = require(script.Parent.EventService)
+local HabitatThemeService = require(script.Parent.HabitatThemeService)
 
 local function notify(player, message, kind)
 	Remotes.get("Notify"):FireClient(player, { Text = message, Kind = kind or "info" })
@@ -43,6 +47,10 @@ end
 InfluenceService.Init()
 MonetizationService.Init()
 MutationLabService.Init()
+MutationItemService.Init()
+CollectionService.Init()
+EventService.Init()
+HabitatThemeService.Init()
 InfluenceService.StartAutoCareLoop()
 
 Remotes.get("EquipCosmetic").OnServerEvent:Connect(function(player, cosmeticId)
@@ -75,7 +83,7 @@ local function onPlayerAdded(player)
 	if plot then
 		profile.HabitatIndex = plot.Index
 		CritterService.RefreshVisual(plot, profile)
-		MonetizationService.ApplyOwnedGamepassEffects(player, profile)
+		HabitatThemeService.ApplyToHabitat(player, profile)
 	else
 		notify(player, "The habitat grid is full right now, sorry! Try again shortly.", "warning")
 	end

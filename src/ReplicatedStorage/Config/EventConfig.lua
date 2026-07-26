@@ -1,24 +1,37 @@
--- Limited-time event framework (see monetization spec Phase 6). Data-only
--- schema + the four example events from the brief, all Active = false --
--- there is no EventService running any of this yet. This exists so the
--- shape (start/end time, event Critters/items/cosmetics/currency/discovery
--- rules) is settled before anyone builds the runtime piece.
+-- Limited-time event framework (see monetization spec Phase 6). "eclipse"
+-- ("First Eclipse") is the one fully wired test event -- see EventService
+-- for the runtime that reads Active/StartTime/EndTime and applies
+-- EclipseShadowBonusPerAction / grants the reward. The other three are
+-- intentionally still schema-only (Active = false, nothing reads their
+-- Critters/Items/Cosmetics/Currency/DiscoveryRules fields yet) -- proving
+-- the architecture with one real event beats half-wiring four of them.
+--
+-- Active = true here is a manual "the event is running" switch, since v1
+-- has no scheduler triggering events automatically -- a developer flips it
+-- (or sets real StartTime/EndTime timestamps, which EventService also
+-- checks) to test in Studio. See README "Testing Phase 6".
 
 local EventConfig = {}
 
 EventConfig.Events = {
 	eclipse = {
 		Id = "eclipse",
-		Name = "Eclipse Event",
-		Description = "Moon-themed Critters and shadow evolution possibilities.",
-		Active = false,
-		StartTime = nil,
-		EndTime = nil,
+		Name = "First Eclipse",
+		Description = "Moon-themed. A faint extra Shadow pull on everything you do.",
+		Active = true,
+		StartTime = nil, -- nil = no lower time bound; set a unix timestamp to test one
+		EndTime = nil, -- nil = no upper time bound; set a unix timestamp to test one
 		Critters = {},
-		Items = {},
+		Items = { "moon_shard" },
 		Cosmetics = {},
 		Currency = nil,
 		DiscoveryRules = {},
+
+		-- Real runtime effect, applied by EventService/InfluenceService
+		-- while the event is active.
+		EclipseShadowBonusPerAction = 1,
+		RewardGems = 50,
+		RewardItemId = "moon_shard",
 	},
 	meteor = {
 		Id = "meteor",

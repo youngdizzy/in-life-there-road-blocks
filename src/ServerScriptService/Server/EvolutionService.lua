@@ -38,9 +38,19 @@ local function pickElementalOutcome(influences)
 end
 
 -- Call after any action that adds Growth Points. No-ops unless the
--- Critter just crossed the threshold and hasn't already evolved.
+-- Critter just crossed the threshold, hasn't already evolved, and its own
+-- species definition actually lists possible evolutions -- e.g. a second
+-- Critter granted directly as "mossy" (see MilestoneService) is already a
+-- final form and should just mature, not re-roll into "blazebit" because
+-- its Fire Influence happened to climb. Only definitions with an
+-- EvolvesInto list (currently just "pip") are eligible at all.
 function EvolutionService.CheckAndEvolve(player, profile, record)
 	if record.EvolvedInto or not GrowthService.IsReadyToEvolve(record) then
+		return
+	end
+
+	local currentDefinition = CritterDefinitions.Get(record.DefinitionId)
+	if not currentDefinition or not currentDefinition.EvolvesInto then
 		return
 	end
 

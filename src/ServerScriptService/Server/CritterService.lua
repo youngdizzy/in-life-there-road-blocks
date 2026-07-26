@@ -22,6 +22,7 @@ local STAGE_SCALE = {
 	Juvenile = 0.85,
 	["Ready to Evolve"] = 1.0,
 	Evolved = 1.0,
+	Mature = 1.0, -- a species with no further evolution (see GrowthService)
 }
 
 local function weld(part, primary)

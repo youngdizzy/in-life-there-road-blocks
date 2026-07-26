@@ -108,8 +108,11 @@ MonetizationConfig.Growth = {
 }
 
 MonetizationConfig.CritterSlots = {
-	Base = 1, -- v1 raises exactly one Critter at a time by design; this is
-	-- the number that grows once a real multi-Critter collection loop exists.
+	-- 2, not 1: room for the starter Pip *and* the second Critter granted by
+	-- MilestoneService, so every free player can actually feel Extra
+	-- Critter Slots matter (it's the first upgrade beyond this). See
+	-- GAME_DESIGN.md "Monetization Phase Status".
+	Base = 2,
 }
 
 MonetizationConfig.AutoCare = {
@@ -125,6 +128,11 @@ MonetizationConfig.Discovery = {
 	BaseChance = 0.05,
 	MaxChance = 0.35,
 	BonusGrowthPoints = 8,
+	-- On a successful Rare Discovery, also grant one random implemented
+	-- Mutation Item -- this is the actual acquisition path for mutation
+	-- items in v1 (see InventoryService/MutationItemService), not a
+	-- separate gacha/shop system.
+	GrantsMutationItem = true,
 }
 
 return MonetizationConfig
