@@ -38,6 +38,10 @@ local idleTweens = {}
 -- running; set false to signal the loop to exit on its next cycle.
 local lookAroundActive = {}
 
+-- [plotIndex] = true while that plot's blink loop should keep running; same
+-- start/stop shape as lookAroundActive.
+local blinkActive = {}
+
 -- Reaction particle colors/counts. Feed and Play read different entries
 -- here so "different actions get different reactions" is a data lookup,
 -- not copy-pasted animation code.
@@ -112,10 +116,11 @@ end
 
 -- Eyes only (with an optional glow color for Nox/Wisp). Eyebrows and the
 -- mouth are built separately by buildFace, since those two are the parts
--- that get rebuilt whenever Mood changes -- see ApplyMood.
-local function buildEyes(body, bodyRadius, eyeColor)
-	local eyeSize = bodyRadius * 0.55
-	body:SetAttribute("EyeSize", eyeSize)
+-- that get rebuilt whenever Mood changes -- see ApplyMood. Both attach to
+-- the head, not the body -- see buildCritterModel's head/body split.
+local function buildEyes(head, headRadius, eyeColor)
+	local eyeSize = headRadius * 0.62
+	head:SetAttribute("EyeSize", eyeSize)
 
 	for _, side in ipairs({ -1, 1 }) do
 		local eye = Instance.new("Part")
@@ -126,9 +131,9 @@ local function buildEyes(body, bodyRadius, eyeColor)
 		eye.Material = eyeColor and Enum.Material.Neon or Enum.Material.SmoothPlastic
 		eye.Color = eyeColor or Color3.new(1, 1, 1)
 		eye.Size = Vector3.new(eyeSize, eyeSize, eyeSize)
-		eye.CFrame = body.CFrame * eyeOffsetCFrame(side, bodyRadius)
-		eye.Parent = body.Parent
-		weld(eye, body)
+		eye.CFrame = head.CFrame * eyeOffsetCFrame(side, headRadius)
+		eye.Parent = head.Parent
+		weld(eye, head)
 
 		local pupil = Instance.new("Part")
 		pupil.Name = "Pupil"
@@ -140,16 +145,33 @@ local function buildEyes(body, bodyRadius, eyeColor)
 		local pupilSize = eyeSize * 0.5
 		pupil.Size = Vector3.new(pupilSize, pupilSize, pupilSize)
 		pupil.CFrame = eye.CFrame * CFrame.new(0, 0, -eyeSize * 0.35)
-		pupil.Parent = body.Parent
-		weld(pupil, body)
+		pupil.Parent = head.Parent
+		weld(pupil, head)
+
+		-- A small fixed catch-light on the same corner of both eyes (not
+		-- mirrored by side) -- the single cheapest way to make a flat-colored
+		-- eye read as glossy/alive instead of a matte dot.
+		local highlight = Instance.new("Part")
+		highlight.Name = "EyeHighlight"
+		highlight.Shape = Enum.PartType.Ball
+		highlight.Anchored = false
+		highlight.CanCollide = false
+		highlight.Material = Enum.Material.SmoothPlastic
+		highlight.Color = Color3.new(1, 1, 1)
+		local highlightSize = pupilSize * 0.4
+		highlight.Size = Vector3.new(highlightSize, highlightSize, highlightSize)
+		highlight.CFrame = pupil.CFrame * CFrame.new(eyeSize * 0.16, eyeSize * 0.14, -eyeSize * 0.1)
+		highlight.Parent = head.Parent
+		weld(highlight, head)
 	end
 end
 
--- Eyebrows (tilt) + mouth (size), both driven by a FACE_PRESETS entry.
--- Rebuildable: called once at construction with DEFAULT_FACE, and again
--- (after destroying the previous copies) whenever ApplyMood changes it.
-local function buildFace(body, bodyRadius, preset)
-	local eyeSize = body:GetAttribute("EyeSize") or bodyRadius * 0.55
+-- Eyebrows (tilt) + mouth (size), both driven by a FACE_PRESETS entry, both
+-- on the head. Rebuildable: called once at construction with DEFAULT_FACE,
+-- and again (after destroying the previous copies) whenever ApplyMood
+-- changes it.
+local function buildFace(head, headRadius, preset)
+	local eyeSize = head:GetAttribute("EyeSize") or headRadius * 0.62
 
 	for _, side in ipairs({ -1, 1 }) do
 		local sideName = side < 0 and "L" or "R"
@@ -165,12 +187,12 @@ local function buildFace(body, bodyRadius, preset)
 		eyebrow.Size = Vector3.new(eyeSize * 0.9, eyeSize * 0.2, eyeSize * 0.25)
 		-- Sits above and slightly forward of the eye, in the eye's own local
 		-- space, tilted by this Mood's brow angle for that eye.
-		eyebrow.CFrame = body.CFrame
-			* eyeOffsetCFrame(side, bodyRadius)
+		eyebrow.CFrame = head.CFrame
+			* eyeOffsetCFrame(side, headRadius)
 			* CFrame.new(0, eyeSize * 0.85, eyeSize * 0.15)
 			* CFrame.Angles(0, 0, math.rad(-side * angle))
-		eyebrow.Parent = body.Parent
-		weld(eyebrow, body)
+		eyebrow.Parent = head.Parent
+		weld(eyebrow, head)
 	end
 
 	local mouth = Instance.new("Part")
@@ -181,18 +203,18 @@ local function buildFace(body, bodyRadius, preset)
 	mouth.Material = Enum.Material.SmoothPlastic
 	mouth.Color = Color3.fromRGB(40, 30, 30)
 
-	local baseSize = bodyRadius * 0.22
+	local baseSize = headRadius * 0.24
 	mouth.Size = Vector3.new(baseSize * preset.MouthSizeX, baseSize * preset.MouthSizeY, baseSize * 0.6)
-	mouth.CFrame = body.CFrame * CFrame.new(0, -bodyRadius * 0.15, -bodyRadius * 0.88)
-	mouth.Parent = body.Parent
-	weld(mouth, body)
+	mouth.CFrame = head.CFrame * CFrame.new(0, -headRadius * 0.18, -headRadius * 0.88)
+	mouth.Parent = head.Parent
+	weld(mouth, head)
 end
 
 -- Two symmetric shapes on top of the head -- the single biggest lever on
 -- silhouette, since it's the one part of the shape that's genuinely
 -- different per evolution (see CritterDefinitions.HeadNubShape). "Round"
 -- is Pip's own baby-form nubs; everything else is a real evolution.
-local function buildHeadNubs(body, bodyRadius, shape, color)
+local function buildHeadNubs(head, headRadius, shape, color)
 	for _, side in ipairs({ -1, 1 }) do
 		local nub = Instance.new("Part")
 		nub.Name = "HeadNub"
@@ -201,30 +223,30 @@ local function buildHeadNubs(body, bodyRadius, shape, color)
 		nub.Material = Enum.Material.SmoothPlastic
 		nub.Color = color
 
-		local baseOffset = CFrame.new(side * bodyRadius * 0.45, bodyRadius * 0.8, -bodyRadius * 0.1)
+		local baseOffset = CFrame.new(side * headRadius * 0.45, headRadius * 0.8, -headRadius * 0.1)
 		local tilt = CFrame.Angles(0, 0, math.rad(-side * 18))
 
 		if shape == "Flame" then
 			nub.Shape = Enum.PartType.Ball
-			nub.Size = Vector3.new(bodyRadius * 0.35, bodyRadius * 0.6, bodyRadius * 0.35)
-			nub.CFrame = body.CFrame * baseOffset * tilt
+			nub.Size = Vector3.new(headRadius * 0.35, headRadius * 0.6, headRadius * 0.35)
+			nub.CFrame = head.CFrame * baseOffset * tilt
 		elseif shape == "Fin" then
 			nub.Shape = Enum.PartType.Wedge
-			nub.Size = Vector3.new(bodyRadius * 0.15, bodyRadius * 0.55, bodyRadius * 0.4)
-			nub.CFrame = body.CFrame * baseOffset * tilt * CFrame.Angles(math.rad(20), 0, 0)
+			nub.Size = Vector3.new(headRadius * 0.15, headRadius * 0.55, headRadius * 0.4)
+			nub.CFrame = head.CFrame * baseOffset * tilt * CFrame.Angles(math.rad(20), 0, 0)
 		elseif shape == "Leaf" then
 			nub.Shape = Enum.PartType.Block
-			nub.Size = Vector3.new(bodyRadius * 0.55, bodyRadius * 0.1, bodyRadius * 0.35)
-			nub.CFrame = body.CFrame * baseOffset * tilt
+			nub.Size = Vector3.new(headRadius * 0.55, headRadius * 0.1, headRadius * 0.35)
+			nub.CFrame = head.CFrame * baseOffset * tilt
 		elseif shape == "Horn" then
 			nub.Shape = Enum.PartType.Block
-			nub.Size = Vector3.new(bodyRadius * 0.16, bodyRadius * 0.65, bodyRadius * 0.16)
-			nub.CFrame = body.CFrame * baseOffset * CFrame.Angles(0, 0, math.rad(-side * 28))
+			nub.Size = Vector3.new(headRadius * 0.16, headRadius * 0.65, headRadius * 0.16)
+			nub.CFrame = head.CFrame * baseOffset * CFrame.Angles(0, 0, math.rad(-side * 28))
 		elseif shape == "Spark" then
 			nub.Shape = Enum.PartType.Ball
 			nub.Material = Enum.Material.Neon
-			nub.Size = Vector3.new(bodyRadius * 0.28, bodyRadius * 0.28, bodyRadius * 0.28)
-			nub.CFrame = body.CFrame * baseOffset
+			nub.Size = Vector3.new(headRadius * 0.28, headRadius * 0.28, headRadius * 0.28)
+			nub.CFrame = head.CFrame * baseOffset
 
 			local light = Instance.new("PointLight")
 			light.Color = color
@@ -233,13 +255,33 @@ local function buildHeadNubs(body, bodyRadius, shape, color)
 			light.Parent = nub
 		else -- "Round" (Pip's default ear-buds)
 			nub.Shape = Enum.PartType.Ball
-			nub.Size = Vector3.new(bodyRadius * 0.32, bodyRadius * 0.4, bodyRadius * 0.32)
-			nub.CFrame = body.CFrame * baseOffset * tilt
+			nub.Size = Vector3.new(headRadius * 0.32, headRadius * 0.4, headRadius * 0.32)
+			nub.CFrame = head.CFrame * baseOffset * tilt
 		end
 
-		nub.Parent = body.Parent
-		weld(nub, body)
+		nub.Parent = head.Parent
+		weld(nub, head)
 	end
+end
+
+-- A single small forehead tuft between the two head-nubs -- one memorable,
+-- shared personality detail rather than a pile of unrelated decorations.
+-- Tinted with the same color as this Critter's head-nubs, so it reads as
+-- part of the same design language instead of a bolted-on extra.
+local function buildForeheadTuft(head, headRadius, color)
+	local tuft = Instance.new("Part")
+	tuft.Name = "ForeheadTuft"
+	tuft.Shape = Enum.PartType.Ball
+	tuft.Anchored = false
+	tuft.CanCollide = false
+	tuft.Material = Enum.Material.SmoothPlastic
+	tuft.Color = color
+	tuft.Size = Vector3.new(headRadius * 0.16, headRadius * 0.4, headRadius * 0.16)
+	tuft.CFrame = head.CFrame
+		* CFrame.new(0, headRadius * 0.92, -headRadius * 0.32)
+		* CFrame.Angles(math.rad(-22), 0, 0)
+	tuft.Parent = head.Parent
+	weld(tuft, head)
 end
 
 -- A small tail with its own gentle, continuous wag -- cheap personality
@@ -340,8 +382,10 @@ local function buildCritterModel(record)
 	local model = Instance.new("Model")
 	model.Name = record.Name
 
-	-- A slightly squashed, elongated ellipsoid instead of a true sphere --
-	-- the single cheapest change that stops this from reading as "a ball."
+	-- The torso: smaller and more compact than the old single-blob body, so
+	-- a distinct head has somewhere to read as separate from it -- the
+	-- single biggest lever on silhouette and proportions (see the Pip
+	-- quality-pass note in git history).
 	local body = Instance.new("Part")
 	body.Name = "Body"
 	body.Shape = Enum.PartType.Ball
@@ -349,16 +393,36 @@ local function buildCritterModel(record)
 	body.CanCollide = false
 	body.Material = Enum.Material.SmoothPlastic
 	body.Color = definition.BodyColor
-	body.Size = Vector3.new(bodyDiameter * 1.02, bodyDiameter * 0.92, bodyDiameter * 1.18)
+	body.Size = Vector3.new(bodyDiameter * 0.95, bodyDiameter * 0.82, bodyDiameter * 0.98)
 	body.Parent = model
 	model.PrimaryPart = body
 	body:SetAttribute("BaseColor", definition.BodyColor)
 	body:SetAttribute("BodyRadius", bodyRadius)
 
+	-- The head: a separate, slightly smaller ellipsoid perched forward and
+	-- up on the torso, overlapping enough at the neck that there's no gap.
+	-- Every facial feature and the head-nubs attach to this, not the body --
+	-- classic big-head-small-body proportions read as "cute" at a glance,
+	-- and give the face its own reference frame independent of the torso's
+	-- own per-Critter squash/stretch.
+	local headRadius = bodyRadius * 0.78
+	local head = Instance.new("Part")
+	head.Name = "Head"
+	head.Shape = Enum.PartType.Ball
+	head.Anchored = false
+	head.CanCollide = false
+	head.Material = Enum.Material.SmoothPlastic
+	head.Color = definition.BodyColor
+	head.Size = Vector3.new(headRadius * 2 * 1.05, headRadius * 2 * 0.98, headRadius * 2 * 1.08)
+	head.CFrame = body.CFrame * CFrame.new(0, bodyRadius * 0.62, -bodyRadius * 0.68)
+	head.Parent = model
+	head:SetAttribute("HeadRadius", headRadius)
+	weld(head, body)
+
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "Info"
 	billboard.Size = UDim2.fromOffset(160, 46)
-	billboard.StudsOffset = Vector3.new(0, bodyRadius + 1.4, 0)
+	billboard.StudsOffset = Vector3.new(0, bodyRadius * 0.62 + headRadius * 1.1 + 1.2, 0)
 	billboard.AlwaysOnTop = true
 	billboard.Parent = body
 
@@ -384,13 +448,16 @@ local function buildCritterModel(record)
 	stageLabel.TextScaled = true
 	stageLabel.Parent = billboard
 
+	local headNubColor = definition.HeadNubColor or definition.BodyColor
+
 	buildBelly(body, bodyRadius, definition.AccentColor or definition.BodyColor)
-	buildEyes(body, bodyRadius, definition.EyeColor)
-	buildFace(body, bodyRadius, DEFAULT_FACE)
-	buildHeadNubs(body, bodyRadius, definition.HeadNubShape or "Round", definition.HeadNubColor or definition.BodyColor)
-	buildTail(body, bodyRadius, definition.HeadNubColor or definition.AccentColor or definition.BodyColor)
-	buildFeet(body, bodyRadius, definition.HeadNubColor or definition.BodyColor)
-	buildAmbientParticle(body, definition.AmbientParticle, definition.HeadNubColor or definition.BodyColor)
+	buildEyes(head, headRadius, definition.EyeColor)
+	buildFace(head, headRadius, DEFAULT_FACE)
+	buildHeadNubs(head, headRadius, definition.HeadNubShape or "Round", headNubColor)
+	buildForeheadTuft(head, headRadius, headNubColor)
+	buildTail(body, bodyRadius, headNubColor or definition.AccentColor or definition.BodyColor)
+	buildFeet(body, bodyRadius, headNubColor)
+	buildAmbientParticle(body, definition.AmbientParticle, headNubColor)
 	CosmeticService.Attach(model, record.EquippedCosmetic)
 
 	return model
@@ -520,12 +587,65 @@ local function stopLookAroundLoop(plotIndex)
 	lookAroundActive[plotIndex] = false
 end
 
+-- A quick, synced eyelid-squish on both eyes (and their pupils/highlights)
+-- every few seconds -- the single cheapest animation that makes a still
+-- face read as alive rather than a painted-on expression. Safe to tween
+-- Size on a welded part (unlike CFrame): WeldConstraint only locks the
+-- relative transform, so it never fights this the way a CFrame tween would.
+local function startBlinkLoop(plotIndex, model)
+	blinkActive[plotIndex] = true
+
+	task.spawn(function()
+		while blinkActive[plotIndex] do
+			task.wait(2.5 + math.random() * 3.5)
+			if not blinkActive[plotIndex] then
+				break
+			end
+
+			local parts = {}
+			for _, child in ipairs(model:GetChildren()) do
+				if child.Name == "Eye" or child.Name == "Pupil" or child.Name == "EyeHighlight" then
+					table.insert(parts, { Part = child, FullSize = child.Size })
+				end
+			end
+			if #parts == 0 then
+				continue
+			end
+
+			for _, entry in ipairs(parts) do
+				TweenService:Create(
+					entry.Part,
+					TweenInfo.new(0.05, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+					{ Size = Vector3.new(entry.FullSize.X, entry.FullSize.Y * 0.08, entry.FullSize.Z) }
+				):Play()
+			end
+
+			task.wait(0.12)
+			if not blinkActive[plotIndex] then
+				break
+			end
+
+			for _, entry in ipairs(parts) do
+				TweenService:Create(
+					entry.Part,
+					TweenInfo.new(0.08, Enum.EasingStyle.Sine, Enum.EasingDirection.In),
+					{ Size = entry.FullSize }
+				):Play()
+			end
+		end
+	end)
+end
+
+local function stopBlinkLoop(plotIndex)
+	blinkActive[plotIndex] = false
+end
+
 -- Retunes the standing face (eyebrows + mouth) to the current Mood.
 -- Rebuilds those two parts rather than tweening them in place: they're
--- WeldConstraint'd to the body for correct bob/hop/turn tracking, and a
+-- WeldConstraint'd to the head for correct bob/hop/turn tracking, and a
 -- WeldConstraint locks the relative transform it was given at creation --
 -- fighting that with a live Tween would just get overridden by the
--- constraint. Destroy-and-recreate at the body's *current* pose is simpler
+-- constraint. Destroy-and-recreate at the head's *current* pose is simpler
 -- and correct. Called from StateService.Push, which already fires on
 -- essentially every meaningful action, so the face stays current without
 -- needing its own separate trigger plumbing.
@@ -535,13 +655,13 @@ function CritterService.ApplyMood(plot, mood)
 		return
 	end
 
-	local body = model.PrimaryPart
-	if not body then
+	local head = model:FindFirstChild("Head")
+	if not head then
 		return
 	end
 
-	local bodyRadius = body:GetAttribute("BodyRadius")
-	if not bodyRadius then
+	local headRadius = head:GetAttribute("HeadRadius")
+	if not headRadius then
 		return
 	end
 
@@ -550,11 +670,11 @@ function CritterService.ApplyMood(plot, mood)
 	for _, name in ipairs({ "Eyebrow_L", "Eyebrow_R", "Mouth" }) do
 		local existing = model:FindFirstChild(name)
 		if existing then
-			destroyWelded(existing, body)
+			destroyWelded(existing, head)
 		end
 	end
 
-	buildFace(body, bodyRadius, preset)
+	buildFace(head, headRadius, preset)
 end
 
 -- Plays a short, visible reaction on the Critter currently on this plot's
@@ -576,13 +696,28 @@ function CritterService.PlayReaction(plot, reactionType)
 		return
 	end
 
+	-- Pulse the head along with the body -- they're separate parts now, and
+	-- a reaction that only recolored the torso while the face stayed static
+	-- would read as broken, not subtle.
+	local head = model:FindFirstChild("Head")
 	local baseColor = body:GetAttribute("BaseColor") or body.Color
+	local headBaseColor = head and head.Color
+
 	local pulseUp = TweenService:Create(body, TweenInfo.new(0.12), { Color = config.Color })
 	local pulseDown = TweenService:Create(body, TweenInfo.new(0.4), { Color = baseColor })
 	pulseUp:Play()
 	pulseUp.Completed:Once(function()
 		pulseDown:Play()
 	end)
+
+	if head then
+		local headPulseUp = TweenService:Create(head, TweenInfo.new(0.12), { Color = config.Color })
+		local headPulseDown = TweenService:Create(head, TweenInfo.new(0.4), { Color = headBaseColor })
+		headPulseUp:Play()
+		headPulseUp.Completed:Once(function()
+			headPulseDown:Play()
+		end)
+	end
 
 	local emitter = Instance.new("ParticleEmitter")
 	emitter.Color = ColorSequence.new(config.Color)
@@ -641,6 +776,7 @@ function CritterService.PlayEvolutionBuildup(plot, color)
 		return 0
 	end
 	local body = model.PrimaryPart
+	local head = model:FindFirstChild("Head")
 
 	local pulse = TweenService:Create(
 		body,
@@ -648,6 +784,13 @@ function CritterService.PlayEvolutionBuildup(plot, color)
 		{ Color = color }
 	)
 	pulse:Play()
+	if head then
+		TweenService:Create(
+			head,
+			TweenInfo.new(0.18, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, 5, true),
+			{ Color = color }
+		):Play()
+	end
 
 	local emitter = Instance.new("ParticleEmitter")
 	emitter.Color = ColorSequence.new(color)
@@ -728,11 +871,13 @@ function CritterService.RefreshVisual(plot, profile)
 	spawnedModels[plot.Index] = model
 	startIdleAnimation(plot.Index, model.PrimaryPart)
 	startLookAroundLoop(plot)
+	startBlinkLoop(plot.Index, model)
 end
 
 function CritterService.ClearPlotVisual(plot)
 	stopIdleAnimation(plot.Index)
 	stopLookAroundLoop(plot.Index)
+	stopBlinkLoop(plot.Index)
 	local existing = spawnedModels[plot.Index]
 	if existing then
 		existing:Destroy()
