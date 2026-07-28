@@ -799,7 +799,12 @@ local function buildGreatPool(center, parent)
 	buildGroundDisc("PoolWater", center, 24, Color3.fromRGB(70, 175, 220), Enum.Material.Neon, model)
 	model.PoolWater.Transparency = 0.15
 	model.PoolWater.CanCollide = false
-	model.PoolWater.CFrame = model.PoolWater.CFrame * CFrame.new(0, 0.3, 0)
+	-- `+ Vector3` is a pure world-space nudge, unlike `* CFrame.new(...)` --
+	-- PoolWater is already rotated 90° to lie flat, so multiplying by a
+	-- translation would shift it sideways along its own rotated axis
+	-- instead of straight up, leaving it flush with (and z-fighting
+	-- against) the sand ground disc right underneath it.
+	model.PoolWater.CFrame = model.PoolWater.CFrame + Vector3.new(0, 0.5, 0)
 
 	for i = 1, 8 do
 		local angle = math.rad(i * 45)
