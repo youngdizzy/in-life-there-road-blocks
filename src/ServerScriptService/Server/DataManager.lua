@@ -55,6 +55,19 @@ function DataManager.DefaultCritterRecord(definitionId, name)
 		EvolutionHistory = {}, -- snapshots captured right before each evolution (see EvolutionService); also read by MutationLabService for "previously discovered" hints
 		LastFeedAt = 0,
 		LastPlayAt = 0,
+
+		-- Provenance fields (see docs/FOUNDATION_ROADMAP.md section 3 and
+		-- docs/TECHNICAL_ARCHITECTURE.md section 3). Origin/ObtainedAt are
+		-- populated by CritterSlotService.AddCritter today; FirstOwner/
+		-- TradeCount/HatchEventId are schema-only until trading exists to
+		-- populate and a Codex/trade UI exists to display them -- see the
+		-- README/GAME_DESIGN.md convention of labeling exactly this
+		-- honestly rather than implying they already do something.
+		Origin = nil, -- "starter" | "milestone" | future: "wild" | "trade" | "purchase" | "event"
+		ObtainedAt = nil, -- os.time() when this record was created
+		FirstOwner = nil, -- UserId of the original owner; SCHEMA ONLY until trading exists
+		TradeCount = 0, -- SCHEMA ONLY until trading exists
+		HatchEventId = nil, -- which limited/seasonal event this came from, if any; SCHEMA ONLY
 	}
 end
 
@@ -79,6 +92,16 @@ function DataManager.DefaultProfile()
 		DiscoveredSpecies = {}, -- [definitionId] = true, see DiscoveryLogService. Distinct from
 		-- `Discoveries` above (the Rare Discovery item-find counter) -- unfortunate near-miss in
 		-- naming history, kept because renaming Discoveries now would just churn every save file.
+
+		-- Guild/trading schema (see docs/FOUNDATION_ROADMAP.md section 3).
+		-- All SCHEMA ONLY -- no guild or trading system reads/writes these
+		-- yet. A guild's own roster/data is NOT duplicated here on purpose
+		-- (see docs/TECHNICAL_ARCHITECTURE.md section 8) -- this is only
+		-- ever a reference into a guild's own separately-saved record.
+		GuildId = nil,
+		GuildRole = nil,
+		TradeHistory = {}, -- completed trade summaries, most recent last
+		PendingTrade = nil, -- in-flight trade id, if any
 	}
 end
 

@@ -36,13 +36,23 @@ end
 -- Returns the new critter's uid on success, or nil, "reason" on failure
 -- (currently only "No free Critter slots"). This is the only sanctioned
 -- way to add a Critter to a profile.
-function CritterSlotService.AddCritter(profile, definitionId, name)
+--
+-- `origin` is a free-form provenance tag ("starter", "milestone", and
+-- eventually "wild"/"trade"/"purchase"/"event") -- see
+-- DataManager.DefaultCritterRecord's Origin/ObtainedAt fields. Passing
+-- nil is fine (Origin just stays nil); every current caller should still
+-- pass one so the field means something from day one instead of needing
+-- a backfill later.
+function CritterSlotService.AddCritter(profile, definitionId, name, origin)
 	if not CritterSlotService.HasFreeSlot(profile) then
 		return nil, "No free Critter slots"
 	end
 
 	local uid = DataManager.NewCritterUid(profile)
-	profile.Critters[uid] = DataManager.DefaultCritterRecord(definitionId, name)
+	local record = DataManager.DefaultCritterRecord(definitionId, name)
+	record.Origin = origin
+	record.ObtainedAt = os.time()
+	profile.Critters[uid] = record
 	return uid
 end
 

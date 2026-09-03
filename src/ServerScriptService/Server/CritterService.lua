@@ -370,12 +370,75 @@ local function buildAmbientParticle(body, particleType, color)
 	emitter.Parent = body
 end
 
+-- Real-asset upgrade path (see CritterDefinitions header comment and
+-- docs/TECHNICAL_ARCHITECTURE.md "Scaling the Critter Roster"): loads a
+-- real Studio-authored model by asset Id instead of building one
+-- procedurally, for the day a given Critter actually has one. Every
+-- field on `definition` stays nil until that's true, so this never runs
+-- against the current 6-Critter roster -- it exists so growing the
+-- roster with real art later needs a data change, not a code change.
+--
+-- Deliberately minimal: it loads the model, names it, and gives it a
+-- PrimaryPart -- it does not attempt to guess a real asset's internal
+-- part/bone names, so features that rely on specific procedural part
+-- names (ApplyMood's Eyebrow_L/Eyebrow_R/Mouth rebuild, PlayReaction's
+-- Body/Head color pulse, the ambient-particle attach point) will simply
+-- no-op for an asset-backed Critter until they're intentionally wired to
+-- that asset's own structure -- every one of those call sites already
+-- guards on "does this part exist" and returns early if not, so this
+-- degrades safely rather than erroring. Wiring animations/sounds from
+-- AssetAnimations/AssetSounds is deferred until there's a real asset to
+-- build and test that against.
+local function loadAssetModel(definition, record, scale)
+	local ok, result = pcall(function()
+		local InsertService = game:GetService("InsertService")
+		local container = InsertService:LoadAsset(definition.AssetModelId)
+		local assetModel = container:FindFirstChildOfClass("Model")
+		container:Destroy()
+		return assetModel
+	end)
+
+	if not ok or not result then
+		warn("CritterService: failed to load AssetModelId for", definition.Id, "--", tostring(result))
+		return nil
+	end
+
+	local assetModel = result
+	assetModel.Name = record.Name
+	if not assetModel.PrimaryPart then
+		assetModel.PrimaryPart = assetModel:FindFirstChildWhichIsA("BasePart", true)
+	end
+
+	if assetModel.PrimaryPart then
+		local scaleOk = pcall(function()
+			assetModel:ScaleTo(scale)
+		end)
+		if not scaleOk then
+			warn("CritterService: ScaleTo failed for", definition.Id, "-- leaving at authored scale")
+		end
+	end
+
+	return assetModel
+end
+
 local function buildCritterModel(record)
 	local definition = CritterDefinitions.Get(record.DefinitionId)
 	assert(definition, "Unknown critter definition: " .. tostring(record.DefinitionId))
 
 	local stageScale = STAGE_SCALE[record.Stage] or 1.0
 	local scale = definition.BaseScale * stageScale
+
+	if definition.AssetModelId then
+		local assetModel = loadAssetModel(definition, record, scale)
+		if assetModel then
+			CosmeticService.Attach(assetModel, record.EquippedCosmetic)
+			return assetModel
+		end
+		-- Falls through to the procedural builder below on any load failure
+		-- (missing/invalid Id, network issue) -- a Critter should never fail
+		-- to spawn just because its real-asset upgrade didn't load.
+	end
+
 	local bodyDiameter = 3 * scale
 	local bodyRadius = bodyDiameter / 2
 
@@ -472,7 +535,7 @@ function CritterService.GrantStarterPipIfNeeded(profile)
 		return
 	end
 
-	local uid = CritterSlotService.AddCritter(profile, "pip", "Pip")
+	local uid = CritterSlotService.AddCritter(profile, "pip", "Pip", "starter")
 	if uid then
 		profile.ActiveCritterUid = uid
 		DiscoveryLogService.MarkDiscovered(profile, "pip")

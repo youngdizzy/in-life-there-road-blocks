@@ -196,26 +196,51 @@ per the Design Bible's own ordering.
 Per the Design Bible's own build order, Phase 1 is **"technical
 foundation."** Much of that already exists and passes verification
 (valid Rojo project, server-authoritative architecture, persistence).
-What Phase 1 concretely needs *now*, before any new code:
+What Phase 1 concretely needs, in order:
 
-1. **A ratified decision on world scale/terrain approach** (Section 5) —
-   this blocks Phase 3 (basic world/town) and cannot be guessed.
-2. **A ratified decision on what happens to the existing small-scope
-   game** — extend it in place, keep it running as the "Meadow/town"
-   piece of the larger world, or treat it as a reference implementation
-   to be superseded. This affects whether `WorldBuilder`/`HabitatBuilder`
-   are extended or replaced.
-3. **The `AssetId`-with-procedural-fallback schema addition** to
-   `CritterDefinitions` (Section 3), so every subsequent Critter-facing
-   system is built against the real long-term shape from day one.
-4. **A DataManager schema extension plan** for the fields the new vision
-   needs (multiple Critters with provenance, currencies beyond Gems,
-   guild membership, quest/discovery state at world scale) — additive,
-   using the existing `fillDefaults` pattern, not a breaking rewrite.
+1. **World scale/terrain approach — RATIFIED 2026-09-03.** Hybrid as the
+   end state (real `Terrain` for geography, Parts for landmarks/
+   structures — Section 5's Hybrid option), but sequenced to start with a
+   Part-based expansion of the existing `WorldBuilder`/`HabitatBuilder`
+   pattern first. Reasoning: this environment has no Studio to visually
+   verify hand-scripted `Terrain` against, while Part geometry is
+   something that can be reasoned about and gotten right precisely, the
+   same way the existing world/Critter work was. Real `Terrain` is a
+   later pass, once there's a way to actually playtest it.
+2. **What happens to the existing small-scope game — RATIFIED
+   2026-09-03.** Extend, not supersede. The current Meadow/zones/habitat
+   build already *is* this plan's own Phase 3 ("basic world/town"); the
+   existing Pip raise/evolve loop already *is* Phases 4–9 (Critter
+   framework, food/growth/bond, basic evolution). Both stay and get built
+   on top of — the Meadow becomes the starting town a much larger world
+   extends outward from; the 6-Critter roster becomes the first 6 real
+   entries in a 300-target roster; Pip's instant-grant onboarding still
+   needs to become a real rescue tutorial (Section 6's "missing
+   entirely" list), but that's additive work, not a rewrite.
+3. **The `AssetId`-with-procedural-fallback schema addition — DONE.**
+   `CritterDefinitions` now documents `AssetModelId`/`AssetAnimations`/
+   `AssetSounds` as the upgrade path (all nil today), and
+   `CritterService.buildCritterModel` checks `AssetModelId` first via a
+   new `loadAssetModel` helper, falling back to the procedural builder on
+   any absence or load failure. Every field stays nil against the
+   current roster, so this is dormant, not yet exercised — but the
+   architecture claim in Section 5 is now literally true, not just
+   documented.
+4. **A DataManager schema extension — DONE (schema only).**
+   `DataManager.DefaultCritterRecord` gained `Origin`, `ObtainedAt`,
+   `FirstOwner`, `TradeCount`, `HatchEventId`; `DataManager.DefaultProfile`
+   gained `GuildId`, `GuildRole`, `TradeHistory`, `PendingTrade`. All
+   additive with safe defaults (no `SCHEMA_VERSION` bump needed, per its
+   own documented policy). `Origin`/`ObtainedAt` are actually populated
+   today (`CritterSlotService.AddCritter` now takes an `origin` tag,
+   passed as `"starter"`/`"milestone"` from its two existing call sites);
+   `FirstOwner`/`TradeCount`/`HatchEventId` stay honestly SCHEMA ONLY
+   until trading exists to populate them and a Codex/trade UI exists to
+   display them.
 
-Only after those four are decided should Phase 2 (player movement/
-character — likely mostly default Roblox, worth confirming) and Phase 3
-(basic world/town) begin.
+With 1–4 settled, Phase 2 (player movement/character — likely mostly
+default Roblox; worth a quick explicit confirmation, not a rebuild) and
+Phase 3 (the Part-based world *expansion*, per decision 1) are next.
 
 ## 8. Dependencies
 

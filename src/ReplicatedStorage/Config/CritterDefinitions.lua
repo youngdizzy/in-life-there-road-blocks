@@ -9,6 +9,21 @@
 -- (see GAME_DESIGN.md "Placeholder Art Policy" / "Making Pip Feel Alive")
 -- -- and is distinguished by color, head-nub shape, eye color, and one
 -- optional ambient particle. See CritterService for what each field drives.
+--
+-- Real-asset upgrade path (see docs/TECHNICAL_ARCHITECTURE.md "Scaling the
+-- Critter Roster"): three more optional fields, all nil/absent until real
+-- Studio-authored assets exist for a given Critter --
+--   AssetModelId      = <asset id of a real rigged model>
+--   AssetAnimations    = { Idle = <id>, Walk = <id>, ... }
+--   AssetSounds        = { Idle = <id>, Reaction = <id>, ... }
+-- CritterService.buildCritterModel checks AssetModelId first and only
+-- falls back to the procedural builder below when it's absent, exactly
+-- like Implemented already gates whether a species is playable at all.
+-- This is how the roster scales toward 300+ without a rewrite: each
+-- entry upgrades from prototype to real asset independently, whenever
+-- art exists for it -- never invent a placeholder asset Id here (same
+-- "never invent fake Ids" rule as MonetizationConfig's Gamepass/Product
+-- Ids); leave the field nil until a real one exists.
 
 local CritterDefinitions = {}
 
