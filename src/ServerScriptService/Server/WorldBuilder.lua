@@ -13,6 +13,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local WorldConfig = require(ReplicatedStorage.Config.WorldConfig)
 local EnvironmentConfig = require(ReplicatedStorage.Config.EnvironmentConfig)
 local PartUtil = require(ReplicatedStorage.Modules.PartUtil)
+local TerrainBuilder = require(script.Parent.TerrainBuilder)
 
 local WorldBuilder = {}
 
@@ -1152,6 +1153,11 @@ function WorldBuilder.Build()
 		label.TextScaled = true
 		label.Parent = billboard
 	end
+
+	-- Phase 2/3 world expansion (see docs/FOUNDATION_ROADMAP.md section 7):
+	-- terrain surrounding each zone/path above -- purely additive, doesn't
+	-- touch or depend on anything built earlier in this function.
+	TerrainBuilder.BuildAll(worldFolder)
 
 	return worldFolder
 end
