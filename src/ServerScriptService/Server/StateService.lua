@@ -18,6 +18,7 @@ local HabitatThemeService = require(script.Parent.HabitatThemeService)
 local MoodService = require(script.Parent.MoodService)
 local DiscoveryLogService = require(script.Parent.DiscoveryLogService)
 local GoalService = require(script.Parent.GoalService)
+local HabitatManager = require(script.Parent.HabitatManager)
 
 local StateService = {}
 
@@ -49,6 +50,17 @@ function StateService.Push(player, profile)
 		})
 	end
 
+	local mood = MoodService.GetMood(record)
+
+	-- Keeps the in-world model's face (eyebrows/mouth) matching whatever
+	-- the UI is about to show -- StateService.Push already fires on every
+	-- action that could change Mood, so this is the one place that needs
+	-- to know about it.
+	local plot = HabitatManager.GetHabitatForOwner(player.UserId)
+	if plot then
+		CritterService.ApplyMood(plot, mood)
+	end
+
 	Remotes.get("StateUpdate"):FireClient(player, {
 		Name = record.Name,
 		Description = definition and definition.Description or "",
@@ -59,7 +71,7 @@ function StateService.Push(player, profile)
 		Happiness = record.Happiness,
 		Evolved = record.EvolvedInto ~= nil,
 		DominantHint = record.EvolvedInto == nil and GrowthService.GetDominantHint(record) or nil,
-		Mood = MoodService.GetMood(record),
+		Mood = mood,
 
 		Gems = profile.Gems,
 		Discoveries = profile.Discoveries,

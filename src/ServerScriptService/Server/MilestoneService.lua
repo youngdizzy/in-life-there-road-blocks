@@ -44,7 +44,7 @@ function MilestoneService.CheckFirstMilestone(player, profile, record)
 		return
 	end
 
-	local uid, reason = CritterSlotService.AddCritter(profile, SECOND_CRITTER_DEFINITION_ID, SECOND_CRITTER_NAME)
+	local uid, reason = CritterSlotService.AddCritter(profile, SECOND_CRITTER_DEFINITION_ID, SECOND_CRITTER_NAME, "milestone")
 	if not uid then
 		-- No free slot (shouldn't happen at the default base of 2, but
 		-- fails safely instead of granting past the cap if it somehow does).

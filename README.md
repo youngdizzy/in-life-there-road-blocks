@@ -11,22 +11,26 @@ deliberately not built yet.
 
 This is a [Rojo](https://rojo.space/) project: every gameplay system is
 real Luau source in this repo, synced into Roblox Studio rather than kept
-in a binary `.rbxl`. The world itself (habitats, Pip's model, zone props)
-is built procedurally by server code at runtime — there are no
-Studio-authored assets to keep in sync.
+in a binary `.rbxl`. The world itself (the Meadow hub, the four public
+Environment Zones, habitats, Pip's model) is built procedurally by server
+code at runtime — there are no Studio-authored assets to keep in sync.
 
 ```
 src/
   ReplicatedStorage/
     Config/        -- pure data: CritterDefinitions, FoodConfig,
                        EnvironmentConfig, GrowthConfig, HabitatConfig,
-                       MonetizationConfig, CosmeticConfig,
+                       WorldConfig, MonetizationConfig, CosmeticConfig,
                        MutationItemConfig, EventConfig, HabitatThemeConfig
-    Modules/        -- Remotes.lua (RemoteEvent/RemoteFunction accessor)
+    Modules/        -- Remotes.lua (RemoteEvent/RemoteFunction accessor),
+                       PartUtil.lua (shared procedural-Part constructor)
   ServerScriptService/
     Server/
       DataManager.lua          -- DataStore persistence
-      HabitatBuilder.lua       -- procedurally builds the world
+      WorldBuilder.lua         -- procedurally builds the shared overworld
+                                  (Meadow, Tree, 4 zones, Archive, Plaza,
+                                  Sanctum) -- see GAME_DESIGN.md "World Map"
+      HabitatBuilder.lua       -- procedurally builds the habitat neighborhood
       HabitatManager.lua       -- assigns/releases habitats; VIP visual render
       CritterService.lua       -- Critter grant + procedural model builder
       CritterSlotService.lua   -- validated Critter-slot gate
@@ -90,8 +94,8 @@ src/
    ```
 
 5. In Studio, open the Rojo plugin panel and click **Connect**. Your
-   place should immediately fill in with the baseplate, habitat grid, and
-   all scripts.
+   place should immediately fill in with the Meadow hub, the four
+   Environment Zones, the habitat grid, and all scripts.
 
 6. Press **Play** (F5) in Studio to test.
 
@@ -107,6 +111,7 @@ no runtime reads it. **PLACEHOLDER** = not started.
 | System | Status | Notes |
 |---|---|---|
 | Core loop (Feed/Play/Grow/Evolve) | **FUNCTIONAL** | Unaffected by anything below |
+| World map (Meadow, 4 public zones, Archive, Plaza, Sanctum, habitat neighborhood) | **FUNCTIONAL** | `WorldBuilder`/`HabitatBuilder`; zones use real `InfluenceService` calls, Archive/Plaza/Sanctum are landmarks with no new mechanics yet |
 | Pip aliveness (idle bob, reactions, Mood) | **FUNCTIONAL** | `CritterService.PlayReaction`/`MoodService`; no Robux involved |
 | Influence legibility (Feed/zone tags) | **FUNCTIONAL** | Feed menu and zone billboards show which Influence each affects |
 | Evolution world effect | **FUNCTIONAL** | Light flash + particle burst at the pedestal, colored to the outcome |
@@ -136,7 +141,7 @@ Run these in order — each depends on the state the previous one left
 behind. All of them work without spending real Robux (see "Monetization
 setup" below for how purchases are simulated).
 
-1. **New player joins.** Drops into an empty habitat with Pip on its pedestal.
+1. **New player joins.** Spawns in the Meadow with Pip already assigned; walk south to find your own habitat pedestal.
 2. **Player receives Pip.** Confirm via the status panel (top-left): name "Pip", stage "Baby".
 3. **Player grows Pip.** Feed/Play repeatedly (respect the 20s cooldowns); Growth meter climbs, hint appears once one Influence pulls ahead.
 4. **Player unlocks the second Critter.** Once Growth hits 90 ("Ready to Evolve"), a "🎉 New Critter unlocked" toast fires and `CollectionUI` shows two entries (Pip + Mossy).
@@ -258,13 +263,15 @@ All of them live in **`src/ReplicatedStorage/Config/MonetizationConfig.lua`**
 
 ## Current scope
 
-See `GAME_DESIGN.md` → "MVP Scope", "Making Pip Feel Alive", "Core Loop Fun
-Audit", "Monetization Phase Status", and "Explicitly Not Built Yet". In
-short: the free loop proves DISCOVER → RAISE → INFLUENCE → GROW → first
-EVOLVE → COLLECT (two Critters), Pip now reads as an actual creature
-(idle motion, reactions, Mood, a Bestiary, an always-visible Goals
-checklist) rather than a model with a progress bar, and the monetization
-systems layer on top of all of it without changing that loop. A shared
-world hub, a scripted tutorial, multi-event scheduling, premium habitat
+See `GAME_DESIGN.md` → "The World Map", "MVP Scope", "Making Pip Feel
+Alive", "Core Loop Fun Audit", "Monetization Phase Status", and
+"Explicitly Not Built Yet". In short: the free loop proves DISCOVER →
+RAISE → EXPLORE → INFLUENCE → GROW → first EVOLVE → COLLECT (two
+Critters), Pip now reads as an actual creature (idle motion, reactions,
+Mood, a Bestiary, an always-visible Goals checklist) rather than a model
+with a progress bar, the world is a real Meadow hub with four public
+Environment Zones players walk between (not a private copy per habitat),
+and the monetization systems layer on top of all of it without changing
+that loop. A scripted tutorial, multi-event scheduling, premium habitat
 re-skins, and evolution reroll remain deliberately deprioritized,
 schema-only, or not started — see "Core Loop Fun Audit" for the reasoning.

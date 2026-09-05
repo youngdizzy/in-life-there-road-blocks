@@ -1,4 +1,5 @@
--- Server entrypoint. Builds the world, wires every habitat's Environment
+-- Server entrypoint. Builds the world (the shared Meadow/zones/landmarks,
+-- then the player-habitat neighborhood), wires the four public Environment
 -- Zone prompts, and runs the player join/leave lifecycle. Runs once when
 -- the server starts.
 
@@ -6,8 +7,10 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Remotes = require(ReplicatedStorage.Modules.Remotes)
+local WorldConfig = require(ReplicatedStorage.Config.WorldConfig)
 
 local DataManager = require(script.Parent.DataManager)
+local WorldBuilder = require(script.Parent.WorldBuilder)
 local HabitatBuilder = require(script.Parent.HabitatBuilder)
 local HabitatManager = require(script.Parent.HabitatManager)
 local CritterService = require(script.Parent.CritterService)
@@ -25,20 +28,21 @@ local function notify(player, message, kind)
 	Remotes.get("Notify"):FireClient(player, { Text = message, Kind = kind or "info" })
 end
 
--- 1. Build the world and hand HabitatManager the resulting habitat list.
+-- 1. Build the shared overworld (Meadow, the four public Environment
+-- Zones, Archive, Plaza, Sanctum), then the player-habitat neighborhood,
+-- and hand HabitatManager the resulting habitat list.
+local worldFolder = WorldBuilder.Build()
 local plots = HabitatBuilder.Build()
 HabitatManager.Init(plots)
 
--- 2. Wire each habitat's four Environment Zone prompts once, at server
--- start -- owner-only; a visiting player (once visiting is a thing) just
--- gets told it's not their habitat instead of affecting someone else's Pip.
-for _, plot in ipairs(plots) do
-	for zoneId, zonePart in pairs(plot.Zones) do
+-- 2. Wire each of the four shared Environment Zone prompts once, at server
+-- start. These are public world destinations now, not part of anyone's
+-- habitat, so -- unlike the old per-habitat zones -- there's no owner
+-- check: any player standing there can play with their own active Critter.
+for _, zoneId in ipairs(WorldConfig.ZoneOrder) do
+	local zonePart = worldFolder:FindFirstChild(zoneId, true)
+	if zonePart then
 		zonePart.PlayPrompt.Triggered:Connect(function(playerWhoTriggered)
-			if plot.OwnerUserId ~= playerWhoTriggered.UserId then
-				notify(playerWhoTriggered, "This isn't your habitat.", "warning")
-				return
-			end
 			InfluenceService.HandlePlayAtZone(playerWhoTriggered, zoneId)
 		end)
 	end

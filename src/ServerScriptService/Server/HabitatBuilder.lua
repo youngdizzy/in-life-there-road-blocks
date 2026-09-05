@@ -1,34 +1,38 @@
--- Procedurally builds the world: baseplate, a spawn pad, and a grid of
--- personal habitats (platform + Pip's pedestal + the four Environment
--- Zone props). Building it in code means there's no binary .rbxl to keep
--- in sync with git -- the whole world lives here as real source.
+-- Procedurally builds the player-habitat neighborhood: a ground patch
+-- connecting it to the Meadow's south path (see WorldBuilder), and a grid
+-- of personal habitats (platform + fence + Pip's pedestal + owner sign).
+-- Building it in code means there's no binary .rbxl to keep in sync with
+-- git -- the whole world lives here as real source.
 --
--- v1 habitats are deliberately small and simple (Development Principle #7,
--- GAME_DESIGN.md "Explicitly Not Built Yet" — no big open world). They
--- exist to give Pip a home and a reason to have four Environment Zones,
--- nothing more yet.
+-- The four Environment Zones used to live one-per-habitat; they're now the
+-- shared public Verdant Wilds / Ember Zone / Tidepool / Gloom Grove
+-- destinations built by WorldBuilder, so a habitat's job is now just "a
+-- home for Pip and a display for your Critter," per the map's own brief.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HabitatConfig = require(ReplicatedStorage.Config.HabitatConfig)
-local EnvironmentConfig = require(ReplicatedStorage.Config.EnvironmentConfig)
+local WorldConfig = require(ReplicatedStorage.Config.WorldConfig)
+local PartUtil = require(ReplicatedStorage.Modules.PartUtil)
 
 local HabitatBuilder = {}
 
-local ZONE_ORDER = { "fire_corner", "water_pool", "nature_patch", "shadow_nook" }
-local ZONE_ANGLES = { 45, 135, 225, 315 } -- degrees, spread evenly around the pedestal
+local newPart = PartUtil.new
 
-local function newPart(props)
-	local part = Instance.new("Part")
-	part.Anchored = true
-	part.TopSurface = Enum.SurfaceType.Smooth
-	part.BottomSurface = Enum.SurfaceType.Smooth
-	for key, value in pairs(props) do
-		part[key] = value
-	end
-	return part
-end
-
+-- A single, small "welcome mat" under the pedestal -- one deliberate touch
+-- of coziness, not a decorating system. Sits flush with the platform so it
+-- reads as a rug, not another step.
 local function buildPedestal(plotModel, platformCFrame)
+	newPart({
+		Name = "Rug",
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.1, 7, 7),
+		Color = Color3.fromRGB(200, 110, 90),
+		Material = Enum.Material.Fabric,
+		CanCollide = false,
+		CFrame = platformCFrame * CFrame.new(0, 1.05, 0) * CFrame.Angles(0, 0, math.rad(90)),
+		Parent = plotModel,
+	})
+
 	local pedestal = newPart({
 		Name = "Pedestal",
 		Size = Vector3.new(5, 1, 5),
@@ -40,57 +44,9 @@ local function buildPedestal(plotModel, platformCFrame)
 	return pedestal
 end
 
-local function buildZone(plotModel, platformCFrame, zoneId, angleDegrees)
-	local zoneConfig = EnvironmentConfig.Get(zoneId)
-	local angle = math.rad(angleDegrees)
-	local offset = Vector3.new(
-		math.cos(angle) * HabitatConfig.ZoneRadius,
-		0.5,
-		math.sin(angle) * HabitatConfig.ZoneRadius
-	)
-
-	local zonePart = newPart({
-		Name = zoneId,
-		Size = Vector3.new(4, 1, 4),
-		Color = zoneConfig.Color,
-		Material = Enum.Material.Neon,
-		CFrame = platformCFrame * CFrame.new(offset),
-		Parent = plotModel,
-	})
-
-	local billboard = Instance.new("BillboardGui")
-	billboard.Name = "ZoneLabel"
-	billboard.Size = UDim2.fromOffset(140, 30)
-	billboard.StudsOffset = Vector3.new(0, 2, 0)
-	billboard.AlwaysOnTop = true
-	billboard.Parent = zonePart
-
-	local label = Instance.new("TextLabel")
-	label.Size = UDim2.fromScale(1, 1)
-	label.BackgroundTransparency = 1
-	label.Text = zoneConfig.Icon and (zoneConfig.Icon .. " " .. zoneConfig.Name) or zoneConfig.Name
-	label.TextColor3 = Color3.new(1, 1, 1)
-	label.TextStrokeTransparency = 0
-	label.Font = Enum.Font.GothamBold
-	label.TextScaled = true
-	label.Parent = billboard
-
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.Name = "PlayPrompt"
-	prompt.ActionText = "Play"
-	prompt.ObjectText = zoneConfig.Name
-	prompt.HoldDuration = 0
-	prompt.MaxActivationDistance = 10
-	prompt.RequiresLineOfSight = false
-	prompt.Parent = zonePart
-
-	return zonePart
-end
-
 -- A low perimeter fence around the platform edge -- just enough that a
 -- habitat reads as "this is MY space" (see GAME_DESIGN.md Phase 6), not a
--- decorating system. Non-collide so it never blocks the player or the
--- Environment Zones (which sit well inside it).
+-- decorating system. Non-collide so it never blocks the player.
 local FENCE_HEIGHT = 1.5
 local FENCE_THICKNESS = 0.4
 
@@ -160,35 +116,32 @@ function HabitatBuilder.Build()
 
 	local totalWidth = HabitatConfig.GridColumns * (HabitatConfig.PlotSize.X + HabitatConfig.PlotSpacing)
 	local totalDepth = HabitatConfig.GridRows * (HabitatConfig.PlotSize.Y + HabitatConfig.PlotSpacing)
+	local center = WorldConfig.HabitatNeighborhoodCenter
 
-	local baseplate = newPart({
-		Name = "Baseplate",
-		Size = Vector3.new(totalWidth + 60, 4, totalDepth + 100),
-		Color = Color3.fromRGB(60, 130, 70),
+	-- Ground runs from the entrance sign (where WorldBuilder's south path
+	-- ends) all the way past the last row of plots, so there's no gap
+	-- between "the path from the Meadow" and "the neighborhood itself."
+	local groundNorthZ = WorldConfig.HabitatEntrance.Z
+	local groundSouthZ = center.Z + totalDepth / 2 + 20
+	local groundDepth = groundSouthZ - groundNorthZ
+	local groundCenterZ = (groundNorthZ + groundSouthZ) / 2
+
+	newPart({
+		Name = "NeighborhoodGround",
+		Size = Vector3.new(totalWidth + 40, 4, groundDepth),
+		Color = Color3.fromRGB(150, 190, 150),
 		Material = Enum.Material.Grass,
-		CFrame = CFrame.new(0, -2, 0),
+		CFrame = CFrame.new(center.X, -2, groundCenterZ),
 		Parent = workspace,
 	})
-	baseplate:SetAttribute("IsBaseplate", true)
-
-	local spawn = Instance.new("SpawnLocation")
-	spawn.Name = "MainSpawn"
-	spawn.Size = Vector3.new(12, 1, 12)
-	spawn.Anchored = true
-	spawn.CanCollide = true
-	spawn.Color = Color3.fromRGB(160, 160, 160)
-	spawn.Material = Enum.Material.SmoothPlastic
-	spawn.Duration = 0
-	spawn.CFrame = CFrame.new(0, 0.5, totalDepth / 2 + 35)
-	spawn.Parent = workspace
 
 	local plotsFolder = Instance.new("Folder")
 	plotsFolder.Name = "Habitats"
 	plotsFolder.Parent = workspace
 
 	local plots = {}
-	local startX = -(HabitatConfig.GridColumns - 1) * (HabitatConfig.PlotSize.X + HabitatConfig.PlotSpacing) / 2
-	local startZ = -(HabitatConfig.GridRows - 1) * (HabitatConfig.PlotSize.Y + HabitatConfig.PlotSpacing) / 2
+	local startX = center.X - (HabitatConfig.GridColumns - 1) * (HabitatConfig.PlotSize.X + HabitatConfig.PlotSpacing) / 2
+	local startZ = center.Z - (HabitatConfig.GridRows - 1) * (HabitatConfig.PlotSize.Y + HabitatConfig.PlotSpacing) / 2
 
 	local index = 0
 	for row = 0, HabitatConfig.GridRows - 1 do
@@ -214,12 +167,6 @@ function HabitatBuilder.Build()
 
 			buildPerimeterFence(plotModel, platformCFrame)
 			local pedestal = buildPedestal(plotModel, platformCFrame)
-
-			local zones = {}
-			for i, zoneId in ipairs(ZONE_ORDER) do
-				zones[zoneId] = buildZone(plotModel, platformCFrame, zoneId, ZONE_ANGLES[i])
-			end
-
 			local sign = buildOwnerSign(plotModel, platformCFrame)
 
 			plots[index] = {
@@ -227,7 +174,6 @@ function HabitatBuilder.Build()
 				Model = plotModel,
 				Platform = platform,
 				Pedestal = pedestal,
-				Zones = zones,
 				Sign = sign,
 				CFrame = platformCFrame,
 				OwnerUserId = nil,

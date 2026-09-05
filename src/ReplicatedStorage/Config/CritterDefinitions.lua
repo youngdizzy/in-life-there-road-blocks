@@ -1,12 +1,29 @@
 -- Data-driven Critter catalog. Adding a new Critter should mean adding a
--- table entry here (plus a spawn shape in CritterService if it needs a
--- unique silhouette) -- never touching InfluenceService, GrowthService,
--- EvolutionService, or DataManager.
+-- table entry here (plus, if it needs a genuinely new silhouette piece,
+-- a new HeadNubShape/TailShape case in CritterService's model builder) --
+-- never touching InfluenceService, GrowthService, EvolutionService, or
+-- DataManager.
 --
--- Every evolution of Pip keeps the same round-body/big-eyes shape language
--- (see GAME_DESIGN.md "Placeholder Art Policy") and is only distinguished
--- by color and a small elemental accessory, so the model builder in
--- CritterService only needs BodyColor/AccessoryColor/AccessoryShape/Scale.
+-- Every evolution of Pip keeps the same silhouette *language* -- egg-round
+-- two-tone body, a pair of head-nubs, stubby feet, a small tail, big eyes
+-- (see GAME_DESIGN.md "Placeholder Art Policy" / "Making Pip Feel Alive")
+-- -- and is distinguished by color, head-nub shape, eye color, and one
+-- optional ambient particle. See CritterService for what each field drives.
+--
+-- Real-asset upgrade path (see docs/TECHNICAL_ARCHITECTURE.md "Scaling the
+-- Critter Roster"): three more optional fields, all nil/absent until real
+-- Studio-authored assets exist for a given Critter --
+--   AssetModelId      = <asset id of a real rigged model>
+--   AssetAnimations    = { Idle = <id>, Walk = <id>, ... }
+--   AssetSounds        = { Idle = <id>, Reaction = <id>, ... }
+-- CritterService.buildCritterModel checks AssetModelId first and only
+-- falls back to the procedural builder below when it's absent, exactly
+-- like Implemented already gates whether a species is playable at all.
+-- This is how the roster scales toward 300+ without a rewrite: each
+-- entry upgrades from prototype to real asset independently, whenever
+-- art exists for it -- never invent a placeholder asset Id here (same
+-- "never invent fake Ids" rule as MonetizationConfig's Gamepass/Product
+-- Ids); leave the field nil until a real one exists.
 
 local CritterDefinitions = {}
 
@@ -20,8 +37,11 @@ CritterDefinitions.Critters = {
 		IsStarter = true,
 		Description = "Curious, hungry, and a little bit silly.",
 		BodyColor = Color3.fromRGB(255, 221, 140),
-		AccessoryColor = nil,
-		AccessoryShape = nil,
+		AccentColor = Color3.fromRGB(255, 241, 214), -- lighter belly/underside
+		EyeColor = nil, -- nil = default white sclera
+		HeadNubShape = "Round",
+		HeadNubColor = Color3.fromRGB(235, 195, 110),
+		AmbientParticle = nil,
 		BaseScale = 1.0,
 		DominantInfluence = nil,
 		EvolvesInto = { "blazebit", "mossy", "nox", "ripple", "wisp" },
@@ -33,8 +53,11 @@ CritterDefinitions.Critters = {
 		Implemented = true,
 		Description = "Warm to the touch and always a little too excited.",
 		BodyColor = Color3.fromRGB(255, 140, 60),
-		AccessoryColor = Color3.fromRGB(255, 200, 60),
-		AccessoryShape = "Flame",
+		AccentColor = Color3.fromRGB(255, 205, 120),
+		EyeColor = nil,
+		HeadNubShape = "Flame",
+		HeadNubColor = Color3.fromRGB(255, 210, 70),
+		AmbientParticle = "Embers",
 		BaseScale = 1.25,
 		DominantInfluence = "Fire",
 	},
@@ -45,8 +68,11 @@ CritterDefinitions.Critters = {
 		Implemented = true,
 		Description = "Smells like rain. Occasionally sprouts a leaf.",
 		BodyColor = Color3.fromRGB(110, 190, 90),
-		AccessoryColor = Color3.fromRGB(70, 140, 60),
-		AccessoryShape = "Leaf",
+		AccentColor = Color3.fromRGB(212, 230, 180),
+		EyeColor = nil,
+		HeadNubShape = "Leaf",
+		HeadNubColor = Color3.fromRGB(70, 140, 60),
+		AmbientParticle = "Petals",
 		BaseScale = 1.25,
 		DominantInfluence = "Nature",
 	},
@@ -57,8 +83,11 @@ CritterDefinitions.Critters = {
 		Implemented = true,
 		Description = "Shows up in photos a half-second late.",
 		BodyColor = Color3.fromRGB(70, 60, 90),
-		AccessoryColor = Color3.fromRGB(150, 90, 210),
-		AccessoryShape = "Spike",
+		AccentColor = Color3.fromRGB(102, 88, 122),
+		EyeColor = Color3.fromRGB(190, 120, 255), -- glowing, replaces the default white sclera
+		HeadNubShape = "Horn",
+		HeadNubColor = Color3.fromRGB(150, 90, 210),
+		AmbientParticle = "Smoke",
 		BaseScale = 1.25,
 		DominantInfluence = "Shadow",
 	},
@@ -69,8 +98,11 @@ CritterDefinitions.Critters = {
 		Implemented = true,
 		Description = "Leaves a small puddle wherever it stands.",
 		BodyColor = Color3.fromRGB(90, 170, 230),
-		AccessoryColor = Color3.fromRGB(180, 225, 245),
-		AccessoryShape = "Droplet",
+		AccentColor = Color3.fromRGB(205, 235, 250),
+		EyeColor = nil,
+		HeadNubShape = "Fin",
+		HeadNubColor = Color3.fromRGB(150, 210, 245),
+		AmbientParticle = "Bubbles",
 		BaseScale = 1.25,
 		DominantInfluence = "Water",
 	},
@@ -84,8 +116,11 @@ CritterDefinitions.Critters = {
 		IsSecret = true,
 		Description = "Nobody quite believes Wisp used to be a Pip.",
 		BodyColor = Color3.fromRGB(40, 35, 55),
-		AccessoryColor = Color3.fromRGB(120, 240, 230),
-		AccessoryShape = "Spark",
+		AccentColor = Color3.fromRGB(62, 55, 82),
+		EyeColor = Color3.fromRGB(140, 255, 240),
+		HeadNubShape = "Spark",
+		HeadNubColor = Color3.fromRGB(120, 240, 230),
+		AmbientParticle = "Motes",
 		BaseScale = 1.3,
 		DominantInfluence = "Secret",
 	},
